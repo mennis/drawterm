@@ -7,10 +7,14 @@
 
 #include	<authsrv.h>
 
+extern int displaydpi;
+extern int forcedpi;
+
 /* minimal set from keyboard.h */
 enum {
 	KF=	0xF000,	/* Rune: beginning of private Unicode space */
 	Kalt=		KF|0x15,
+    Kcmd=   0xF100  /* Rune: beginning of Cmd+'a', Cmd+'A', etc on Mac */
 };
 
 void	(*consdebug)(void) = nil;
@@ -410,37 +414,54 @@ _kbdputc(int c)
 //	qproduce(kbdq, buf, n);
 }
 
+void resizeimg(void);
+
 /* _kbdputc, but with compose translation */
 int
 kbdputc(Queue *q, int c)
 {
-	int	i;
+	static Rune k[10];
 	static int nk;
-	static Rune kc[5];
+	int	i;
 
-	 if(c == Kalt){
-		 collecting = 1;
-		 nk = 0;
-		 return 0;
-	 }
-
-	 if(!collecting){
-		 _kbdputc(c);
-		 return 0;
-	 }
-
-	kc[nk++] = c;
-	c = latin1(kc, nk);
-	if(c < -1)  /* need more keystrokes */
+	if(c == Kalt){
+		collecting = !collecting;
+		nk = 0;
 		return 0;
-	if(c != -1) /* valid sequence */
+	}
+	/*
+	if(c == Kcmd+'r') {
+		if(forcedpi)
+			forcedpi = 0;
+		else if(displaydpi >= 200)
+			forcedpi = 100;
+		else
+			forcedpi = 225;
+		resizeimg();
+		return 0;
+	}
+	*/
+	if(!collecting){
 		_kbdputc(c);
-	else
+		return 0;
+	}
+	if(nk >= nelem(k))      // should not happen
+		nk = 0;
+	k[nk++] = c;
+	c = latin1(k, nk);
+	if(c > 0){
+		collecting = 0;
+		_kbdputc(c);
+		nk = 0;
+		return 0;
+	}
+	if(c == -1){
+		collecting = 0;
 		for(i=0; i<nk; i++)
-		 	_kbdputc(kc[i]);
-	nk = 0;
-	collecting = 0;
-
+			_kbdputc(k[i]);
+		nk = 0;
+	}
+	/* need more keystrokes */
 	return 0;
 }
 

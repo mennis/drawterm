@@ -10,4 +10,5 @@ int parsewinsize(char*, Rectangle*, int*);
 NSUInteger mouseswap(NSUInteger);
 void abortcompose(void);
 
-
+extern int displaydpi;
+extern int forcedpi;
