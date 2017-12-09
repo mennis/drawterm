@@ -12,6 +12,9 @@
 #include	<cursor.h>
 #include	"screen.h"
 
+int forcedpi = 0;
+int displaydpi = 100;
+
 enum
 {
 	Qtopdir		= 0,
@@ -1398,10 +1401,10 @@ drawcoord(uchar *p, uchar *maxp, int oldx, int *newx)
 		x |= *p++ << 7;
 		x |= *p++ << 15;
 		if(x & (1<<22))
-			x |= ~0<<23;
+			x |= ~0U<<23;
 	}else{
 		if(b & 0x40)
-			x |= ~0<<7;
+			x |= ~0U<<7;
 		x += oldx;
 	}
 	*newx = x;
@@ -1461,9 +1464,10 @@ printmesg(char *fmt, uchar *a, int plsprnt)
 void
 drawmesg(Client *client, void *av, int n)
 {
+	char cbuf[40], ibuf[12*12+1], *s;
 	int c, repl, m, y, dstid, scrnid, ni, ci, j, nw, e0, e1, op, ox, oy, oesize, esize, doflush;
 	uchar *u, *a, refresh;
-	char *fmt;
+	char *pfmt;
 	ulong value, chan;
 	Rectangle r, clipr;
 	Point p, q, *pp, sp;
@@ -1474,27 +1478,28 @@ drawmesg(Client *client, void *av, int n)
 	DName *dn;
 	DScreen *dscrn;
 	FChar *fc;
+	Fmt fmt;
 	Refx *refx;
 	CScreen *cs;
 	Refreshfn reffn;
 
 	a = av;
 	m = 0;
-	fmt = nil;
+	pfmt = nil;
 	if(waserror()){
-		if(fmt) printmesg(fmt, a, 1);
+		if(pfmt) printmesg(pfmt, a, 1);
 	/*	iprint("error: %s\n", up->errstr);	*/
 		nexterror();
 	}
 	while((n-=m) > 0){
-		USED(fmt);
+		USED(pfmt);
 		a += m;
 		switch(*a){
 		default:
 			error("bad draw command");
 		/* new allocate: 'b' id[4] screenid[4] refresh[1] chan[4] repl[1] R[4*4] clipR[4*4] rrggbbaa[4] */
 		case 'b':
-			printmesg(fmt="LLbLbRRL", a, 0);
+			printmesg(pfmt="LLbLbRRL", a, 0);
 			m = 1+4+4+1+4+1+4*4+4*4+4;
 			if(n < m)
 				error(Eshortdraw);
@@ -1569,7 +1574,7 @@ drawmesg(Client *client, void *av, int n)
 
 		/* allocate screen: 'A' id[4] imageid[4] fillid[4] public[1] */
 		case 'A':
-			printmesg(fmt="LLLb", a, 1);
+			printmesg(pfmt="LLLb", a, 1);
 			m = 1+4+4+4+1;
 			if(n < m)
 				error(Eshortdraw);
@@ -1588,7 +1593,7 @@ drawmesg(Client *client, void *av, int n)
 
 		/* set repl and clip: 'c' dstid[4] repl[1] clipR[4*4] */
 		case 'c':
-			printmesg(fmt="LbR", a, 0);
+			printmesg(pfmt="LbR", a, 0);
 			m = 1+4+1+4*4;
 			if(n < m)
 				error(Eshortdraw);
@@ -1605,7 +1610,7 @@ drawmesg(Client *client, void *av, int n)
 
 		/* draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4] */
 		case 'd':
-			printmesg(fmt="LLLRPP", a, 0);
+			printmesg(pfmt="LLLRPP", a, 0);
 			m = 1+4+4+4+4*4+2*4+2*4;
 			if(n < m)
 				error(Eshortdraw);
@@ -1623,7 +1628,7 @@ drawmesg(Client *client, void *av, int n)
 
 		/* toggle debugging: 'D' val[1] */
 		case 'D':
-			printmesg(fmt="b", a, 0);
+			printmesg(pfmt="b", a, 0);
 			m = 1+1;
 			if(n < m)
 				error(Eshortdraw);
@@ -1633,7 +1638,7 @@ drawmesg(Client *client, void *av, int n)
 		/* ellipse: 'e' dstid[4] srcid[4] center[2*4] a[4] b[4] thick[4] sp[2*4] alpha[4] phi[4]*/
 		case 'e':
 		case 'E':
-			printmesg(fmt="LLPlllPll", a, 0);
+			printmesg(pfmt="LLPlllPll", a, 0);
 			m = 1+4+4+2*4+4+4+4+2*4+2*4;
 			if(n < m)
 				error(Eshortdraw);
@@ -1667,7 +1672,7 @@ drawmesg(Client *client, void *av, int n)
 
 		/* free: 'f' id[4] */
 		case 'f':
-			printmesg(fmt="L", a, 1);
+			printmesg(pfmt="L", a, 1);
 			m = 1+4;
 			if(n < m)
 				error(Eshortdraw);
@@ -1679,7 +1684,7 @@ drawmesg(Client *client, void *av, int n)
 
 		/* free screen: 'F' id[4] */
 		case 'F':
-			printmesg(fmt="L", a, 1);
+			printmesg(pfmt="L", a, 1);
 			m = 1+4;
 			if(n < m)
 				error(Eshortdraw);
@@ -1689,7 +1694,7 @@ drawmesg(Client *client, void *av, int n)
 
 		/* initialize font: 'i' fontid[4] nchars[4] ascent[1] */
 		case 'i':
-			printmesg(fmt="Llb", a, 1);
+			printmesg(pfmt="Llb", a, 1);
 			m = 1+4+4+1;
 			if(n < m)
 				error(Eshortdraw);
@@ -1713,9 +1718,81 @@ drawmesg(Client *client, void *av, int n)
 			font->ascent = a[9];
 			continue;
 
+		/* set image 0 to screen image */
+		case 'J':
+			m = 1;
+			if(n < m)
+				error(Eshortdraw);
+			if(drawlookup(client, 0, 0))
+				error(Eimageexists);
+			drawinstall(client, 0, screenimage, 0);
+			client->infoid = 0;
+			continue;
+
+		/* get image info: 'I' */
+		case 'I':
+			m = 1;
+			if(n < m)
+				error(Eshortdraw);
+			if(client->infoid < 0)
+				error(Enodrawimage);
+			if(client->infoid == 0){
+				i = screenimage;
+				if(i == nil)
+					error(Enodrawimage);
+			}else{
+				di = drawlookup(client, client->infoid, 1);
+				if(di == nil)
+					error(Enodrawimage);
+				i = di->image;
+			}
+			ni = sprint(ibuf, "%11d %11d %11s %11d %11d %11d %11d %11d"
+					" %11d %11d %11d %11d ",
+					client->clientid,
+					client->infoid,	
+					chantostr(cbuf, i->chan),
+					(i->flags&Frepl)==Frepl,
+					i->r.min.x, i->r.min.y, i->r.max.x, i->r.max.y,
+					i->clipr.min.x, i->clipr.min.y, 
+					i->clipr.max.x, i->clipr.max.y);
+			free(client->readdata);
+			client->readdata = malloc(ni);
+			if(client->readdata == nil)
+				error(Enomem);
+			memmove(client->readdata, ibuf, ni);
+			client->nreaddata = ni;
+			client->infoid = -1;
+			continue;
+		
+		/* query: 'Q' n[1] queryspec[n] */
+		case 'q':
+			if(n < 2)
+				error(Eshortdraw);
+			m = 1+1+a[1];
+			if(n < m)
+				error(Eshortdraw);
+			fmtstrinit(&fmt);
+			for(c=0; c<a[1]; c++) {
+				switch(a[2+c]) {
+				default:
+					error("unknown query");
+				case 'd':	/* dpi */
+					if(forcedpi)
+						fmtprint(&fmt, "%11d ", forcedpi);
+					else
+						fmtprint(&fmt, "%11d ", displaydpi);
+					break;
+				}
+			}
+			client->readdata = (uchar*)fmtstrflush(&fmt);
+			if(client->readdata == nil)
+				error(Enomem);
+			client->nreaddata = strlen((char*)client->readdata);
+			continue;
+
 		/* load character: 'l' fontid[4] srcid[4] index[2] R[4*4] P[2*4] left[1] width[1] */
 		case 'l':
-			printmesg(fmt="LLSRPbb", a, 0);
+			printmesg(pfmt="LLSRPbb", a, 0);
 			m = 1+4+4+2+4*4+2*4+1+1;
 			if(n < m)
 				error(Eshortdraw);
@@ -1742,7 +1819,7 @@ drawmesg(Client *client, void *av, int n)
 
 		/* draw line: 'L' dstid[4] p0[2*4] p1[2*4] end0[4] end1[4] radius[4] srcid[4] sp[2*4] */
 		case 'L':
-			printmesg(fmt="LPPlllLP", a, 0);
+			printmesg(pfmt="LPPlllLP", a, 0);
 			m = 1+4+2*4+2*4+4+4+4+4+2*4;
 			if(n < m)
 				error(Eshortdraw);
@@ -1781,7 +1858,7 @@ drawmesg(Client *client, void *av, int n)
 
 		/* attach to a named image: 'n' dstid[4] j[1] name[j] */
 		case 'n':
-			printmesg(fmt="Lz", a, 0);
+			printmesg(pfmt="Lz", a, 0);
 			m = 1+4+1;
 			if(n < m)
 				error(Eshortdraw);
@@ -1813,7 +1890,7 @@ drawmesg(Client *client, void *av, int n)
 
 		/* name an image: 'N' dstid[4] in[1] j[1] name[j] */
 		case 'N':
-			printmesg(fmt="Lbz", a, 0);
+			printmesg(pfmt="Lbz", a, 0);
 			m = 1+4+1+1;
 			if(n < m)
 				error(Eshortdraw);
@@ -1843,7 +1920,7 @@ drawmesg(Client *client, void *av, int n)
 
 		/* position window: 'o' id[4] r.min [2*4] screenr.min [2*4] */
 		case 'o':
-			printmesg(fmt="LPP", a, 0);
+			printmesg(pfmt="LPP", a, 0);
 			m = 1+4+2*4+2*4;
 			if(n < m)
 				error(Eshortdraw);
@@ -1866,7 +1943,7 @@ drawmesg(Client *client, void *av, int n)
 
 		/* set compositing operator for next draw operation: 'O' op */
 		case 'O':
-			printmesg(fmt="b", a, 0);
+			printmesg(pfmt="b", a, 0);
 			m = 1+1;
 			if(n < m)
 				error(Eshortdraw);
@@ -1877,7 +1954,7 @@ drawmesg(Client *client, void *av, int n)
 		/* polygon: 'p' dstid[4] n[2] end0[4] end1[4] radius[4] srcid[4] sp[2*4] p0[2*4] dp[2*2*n] */
 		case 'p':
 		case 'P':
-			printmesg(fmt="LslllLPP", a, 0);
+			printmesg(pfmt="LslllLPP", a, 0);
 			m = 1+4+2+4+4+4+4+2*4;
 			if(n < m)
 				error(Eshortdraw);
@@ -1952,11 +2029,13 @@ drawmesg(Client *client, void *av, int n)
 
 		/* read: 'r' id[4] R[4*4] */
 		case 'r':
-			printmesg(fmt="LR", a, 0);
+			printmesg(pfmt="LR", a, 0);
 			m = 1+4+4*4;
 			if(n < m)
 				error(Eshortdraw);
 			i = drawimage(client, a+1);
+			if(!i)
+				error(Enodrawimage);
 			drawrectangle(&r, a+5);
 			if(!rectinrect(r, i->r))
 				error(Ereadoutside);
@@ -1978,7 +2057,7 @@ drawmesg(Client *client, void *av, int n)
 		/* stringbg: 'x' dstid[4] srcid[4] fontid[4] P[2*4] clipr[4*4] sp[2*4] ni[2] bgid[4] bgpt[2*4] ni*(index[2]) */
 		case 's':
 		case 'x':
-			printmesg(fmt="LLLPRPs", a, 0);
+			printmesg(pfmt="LLLPRPs", a, 0);
 			m = 1+4+4+4+2*4+4*4+2*4+2;
 			if(*a == 'x')
 				m += 4+2*4;
@@ -2043,7 +2122,7 @@ drawmesg(Client *client, void *av, int n)
 
 		/* use public screen: 'S' id[4] chan[4] */
 		case 'S':
-			printmesg(fmt="Ll", a, 0);
+			printmesg(pfmt="Ll", a, 0);
 			m = 1+4+4;
 			if(n < m)
 				error(Eshortdraw);
@@ -2061,7 +2140,7 @@ drawmesg(Client *client, void *av, int n)
 
 		/* top or bottom windows: 't' top[1] nw[2] n*id[4] */
 		case 't':
-			printmesg(fmt="bsL", a, 0);
+			printmesg(pfmt="bsL", a, 0);
 			m = 1+1+2;
 			if(n < m)
 				error(Eshortdraw);
@@ -2102,7 +2181,7 @@ drawmesg(Client *client, void *av, int n)
 
 		/* visible: 'v' */
 		case 'v':
-			printmesg(fmt="", a, 0);
+			printmesg(pfmt="", a, 0);
 			m = 1;
 			drawflush();
 			continue;
@@ -2111,7 +2190,7 @@ drawmesg(Client *client, void *av, int n)
 		/* write from compressed data: 'Y' id[4] R[4*4] data[x*1] */
 		case 'y':
 		case 'Y':
-			printmesg(fmt="LR", a, 0);
+			printmesg(pfmt="LR", a, 0);
 		//	iprint("load %c\n", *a);
 			m = 1+4+4*4;
 			if(n < m)
