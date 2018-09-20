@@ -584,7 +584,7 @@ fsdirread(Chan *c, uchar *va, int count, ulong offset)
 	struct passwd *pwd;
 	struct group *grp;
 
-/*print("fsdirread %s\n", c2name(c));*/
+/* print("fsdirread %s\n", uc2name(c)); */
 	i = 0;
 	uif = c->aux;
 
@@ -618,7 +618,10 @@ fsdirread(Chan *c, uchar *va, int count, ulong offset)
 		pwd = getpwuid(stbuf.st_uid);
 		grp = getgrgid(stbuf.st_gid);
 
-		d.uid = pwd->pw_name;
+		if(pwd)
+			d.uid = pwd->pw_name;
+		else
+			d.uid = "unknown";
 		if(grp)
 			d.gid = grp->gr_name;
 		else {
