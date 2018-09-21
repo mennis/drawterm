@@ -3,7 +3,9 @@
 #include <draw.h>
 
 static int	fontresize(Font*, int, int, int);
-//static int	freeup(Font*);
+#if 0
+static int	freeup(Font*);
+#endif
 
 #define	PJW	0	/* use NUL==pjw for invisible characters */
 
@@ -130,7 +132,7 @@ agefont(Font *f)
 			if(s->age){
 				if(s->age<SUBFAGE && s->cf->name != nil){
 					/* clean up */
-					if(s->f != display->defaultsubfont)
+					if(display==nil || s->f != display->defaultsubfont)
 						freesubfont(s->f);
 					s->cf = nil;
 					s->f = nil;
@@ -155,9 +157,11 @@ cf2subfont(Cachefont *cf, Font *f)
 
 	name = cf->subfontname;
 	if(name == nil){
-		if(f->display && f->display->screenimage)
-			depth = f->display->screenimage->depth;
-		else
+		depth = 0;
+		if(f->display){
+			if(f->display->screenimage)
+				depth = f->display->screenimage->depth;
+		}else
 			depth = 8;
 		name = subfontname(cf->name, f->name, depth);
 		if(name == nil)
@@ -218,16 +222,14 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
 			subf->age = 0;
 		}else{				/* too recent; grow instead */
 			of = f->subf;
-			f->subf = malloc((f->nsubf+DSUBF)*sizeof *subf);
+			f->subf = realloc(of, (f->nsubf+DSUBF)*sizeof *subf);
 			if(f->subf == nil){
 				f->subf = of;
 				goto Toss;
 			}
-			memmove(f->subf, of, (f->nsubf+DSUBF)*sizeof *subf);
 			memset(f->subf+f->nsubf, 0, DSUBF*sizeof *subf);
 			subf = &f->subf[f->nsubf];
 			f->nsubf += DSUBF;
-			free(of);
 		}
 	}
 	subf->age = 0;

@@ -125,7 +125,7 @@ namedimage(Display *d, char *name)
 	}
 	/* flush pending data so we don't get error allocating the image */
 	flushimage(d, 0);
-	a = bufimage(d, 1+4+1+n);
+	a = bufimage(d, 1+4+1+n+1);
 	if(a == 0)
 		goto Error;
 	d->imageid++;
@@ -134,6 +134,7 @@ namedimage(Display *d, char *name)
 	BPLONG(a+1, id);
 	a[5] = n;
 	memmove(a+6, name, n);
+	a[6+n] = 'I';
 	if(flushimage(d, 0) < 0)
 		goto Error;
 
@@ -236,6 +237,10 @@ freeimage(Image *i)
 {
 	int ret;
 
+	if(i == nil)
+		return 0;
+	if(i == screen)
+		abort();
 	ret = _freeimage1(i);
 	free(i);
 	return ret;

@@ -4,25 +4,18 @@
 #include <thread.h>
 #include <keyboard.h>
 
-
 void
 closekeyboard(Keyboardctl *kc)
 {
+	Rune r;
+	
 	if(kc == nil)
 		return;
 
 	postnote(PNPROC, kc->pid, "kill");
 
-#ifdef BUG
-	/* Drain the channel */
-	while(?kc->c)
-		<-kc->c;
-#endif
-
-	close(kc->ctlfd);
-	close(kc->consfd);
-	free(kc->file);
-	free(kc->c);
+	do; while(nbrecv(kc->c, &r) > 0);
+	chanfree(kc->c);
 	free(kc);
 }
 

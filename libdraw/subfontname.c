@@ -9,14 +9,16 @@
 char*
 subfontname(char *cfname, char *fname, int maxdepth)
 {
-	char *t, *u, *tmp1, *tmp2;
-	int i;
+	char *t, *u, *tmp1, *tmp2, *base;
+	int i, scale;
+	
+	scale = parsefontscale(fname, &base);
 
 	t = strdup(cfname);  /* t is the return string */
 	if(strcmp(cfname, "*default*") == 0)
 		return t;
 	if(t[0] != '/'){
-		tmp2 = strdup(fname);
+		tmp2 = strdup(base);
 		u = utfrrune(tmp2, '/');
 		if(u)
 			u[0] = 0;
@@ -38,6 +40,11 @@ subfontname(char *cfname, char *fname, int maxdepth)
 		tmp2 = smprint("%s.%d", t, i);
 		if(access(tmp2, AREAD) == 0) {
 			free(t);
+			if(scale > 1) {
+				t = smprint("%d*%s", scale, tmp2);
+				free(tmp2);
+				tmp2 = t;
+			}
 			return tmp2;
 		}
 		free(tmp2);

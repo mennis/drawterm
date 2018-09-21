@@ -14,6 +14,7 @@ _stringnwidth(Font *f, char *s, Rune *r, int len)
 	Rune rune, **rptr;
 	char *subfontname, **sptr;
 	Font *def;
+	Subfont *sf;
 
 	if(s == nil){
 		s = "";
@@ -31,6 +32,7 @@ _stringnwidth(Font *f, char *s, Rune *r, int len)
 		if(len < max)
 			max = len;
 		n = 0;
+		sf = nil;
 		while((l = cachechars(f, sptr, rptr, cbuf, max, &wid, &subfontname)) <= 0){
 			if(++n > 10){
 				if(*r)
@@ -41,19 +43,26 @@ _stringnwidth(Font *f, char *s, Rune *r, int len)
 					name = f->name;
 				else
 					name = "unnamed font";
+				freesubfont(sf);
 				fprint(2, "stringwidth: bad character set for rune 0x%.4ux in %s\n", rune, name);
 				return twid;
 			}
 			if(subfontname){
-				if(_getsubfont(f->display, subfontname) == 0){
-					def = f->display->defaultfont;
+				freesubfont(sf);
+				if((sf=_getsubfont(f->display, subfontname)) == 0){
+					def = f->display ? f->display->defaultfont : nil;
 					if(def && f!=def)
 						f = def;
 					else
 						break;
 				}
+				/* 
+				 * must not free sf until cachechars has found it in the cache
+				 * and picked up its own reference.
+				 */
 			}
 		}
+		freesubfont(sf);
 		agefont(f);
 		twid += wid;
 		len -= l;

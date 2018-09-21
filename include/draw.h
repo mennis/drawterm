@@ -66,6 +66,7 @@ enum
 	Displaybufsize	= 8000,
 	ICOSSCALE	= 1024,
 	Borderwidth =	4,
+	DefaultDPI	= 133
 };
 
 enum
@@ -205,6 +206,11 @@ struct Display
 	Image		*windows;
 	Image		*screenimage;
 	int		_isnewdisplay;
+	
+	int		dpi;
+	
+	Font	*firstfont;
+	Font	*lastfont;
 };
 
 struct Image
@@ -304,6 +310,7 @@ struct Cachesubf
 struct Font
 {
 	char		*name;
+	char		*namespec;
 	Display		*display;
 	short		height;	/* max height of image, interline spacing */
 	short		ascent;	/* top of image to baseline */
@@ -313,10 +320,20 @@ struct Font
 	int		maxdepth;	/* maximum depth of all loaded subfonts */
 	int		ncache;	/* size of cache */
 	int		nsubf;	/* size of subfont list */
+	int		scale;	/* pixel scaling to apply */
 	Cacheinfo	*cache;
 	Cachesubf	*subf;
 	Cachefont	**sub;	/* as read from file */
 	Image		*cacheimage;
+
+	/* doubly linked list of fonts known to display */
+	int ondisplaylist;
+	Font *next;
+	Font *prev;
+	
+	/* on hi-dpi systems, one of these is set to f and the other is the other-dpi version of f */
+	Font	*lodpi;
+	Font	*hidpi;
 };
 
 #define	Dx(r)	((r).max.x-(r).min.x)
@@ -462,6 +479,7 @@ extern void	borderop(Image*, Rectangle, int, Image*, Point, Drawop);
  * Font management
  */
 extern Font*	openfont(Display*, char*);
+extern int	parsefontscale(char*, char**);
 extern Font*	buildfont(Display*, char*, char*);
 extern void	freefont(Font*);
 extern Font*	mkfont(Subfont*, Rune);
