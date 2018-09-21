@@ -262,6 +262,7 @@ emenuhit(int but, Mouse *m, Menu *menu)
 		freeimage(b);
 	freeimage(save);
 	replclipr(screen, 0, sc);
+	flushimage(display, 1);
 	if(lasti >= 0){
 		menu->lasthit = lasti+off;
 		return menu->lasthit;

@@ -1,6 +1,7 @@
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
+#include <mouse.h>
 
 Display	*display;
 Font	*font;
@@ -10,8 +11,13 @@ int	_drawdebug = 0;
 static char deffontname[] = "*default*";
 Screen	*_screen;
 
-int		debuglockdisplay = 0;
+int		debuglockdisplay = 1;
+char	*winsize;
 
+int		visibleclicks = 0;
+Image	*mousebuttons;
+Image	*mousesave;
+Mouse	_drawmouse;
 static void _closedisplay(Display*, int);
 
 /* note handler */
@@ -32,7 +38,7 @@ geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *l
 {
 	int fd, n;
 	Subfont *df;
-	char buf[128];
+	char buf[128], *p;
 
 	display = initdisplay(devdir, windir, error);
 	if(display == nil)
@@ -104,13 +110,34 @@ geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *l
 	if(gengetwindow(display, buf, &screen, &_screen, ref) < 0)
 		goto Error;
 
-	atexit(drawshutdown);
+    p = getenv("visibleclicks");
+    visibleclicks = p != nil && *p == '1';
+    if(visibleclicks) {
+        Font *f;
+        
+        f = display->defaultfont;
+        mousebuttons = allocimage(display, Rect(0,0,64,22), screen->chan, 0, DWhite);
+        border(mousebuttons, mousebuttons->r, 1, display->black, ZP);
+        border(mousebuttons, Rect(0, 0, 22, 22), 1, display->black, ZP);
+        border(mousebuttons, Rect(42, 0, 64, 22), 1, display->black, ZP);
+        string(mousebuttons, Pt(10-stringwidth(display->defaultfont, "1")/2, 11-f->height/2), display->black, ZP, display->defaultfont, "1");
+        string(mousebuttons, Pt(21+10-stringwidth(display->defaultfont, "2")/2, 11-f->height/2), display->black, ZP, display->defaultfont, "2");
+        string(mousebuttons, Pt(42+10-stringwidth(display->defaultfont, "3")/2, 11-f->height/2), display->black, ZP, display->defaultfont, "3");
+        mousesave = allocimage(display, Rect(0,0,64,22), screen->chan, 0, 0);
+    }
 
+	/*
+	 * I don't see any reason to go away gracefully,
+	 * and if some other proc exits holding the display
+	 * lock, this atexit call never finishes.
+	 *
+	 * atexit(drawshutdown);
+	 */
 	return 1;
 }
 
 int
-initdraw(void(*error)(Display*, char*), char *fontname , char *label)
+initdraw(void (*error)(Display*, char*), char *fontname, char *label)
 {
 	char *dev = "/dev";
 
@@ -371,8 +398,10 @@ _closedisplay(Display *disp, int isshutdown)
 
 	free(disp->devdir);
 	free(disp->windir);
-	freeimage(disp->white);
-	freeimage(disp->black);
+    if(disp->white)
+        freeimage(disp->white);
+    if(disp->black)
+        freeimage(disp->black);
 	close(disp->fd);
 	close(disp->ctlfd);
 	/* should cause refresh slave to shut down */
@@ -437,8 +466,29 @@ doflush(Display *d)
 int
 flushimage(Display *d, int visible)
 {
-	if(d == nil)
-		return 0;
+	if(visible == 1 && visibleclicks && mousebuttons && _drawmouse.buttons) {
+		Rectangle r, r1;
+		int ret;
+
+		r = mousebuttons->r;
+		r = rectaddpt(r, _drawmouse.xy);
+		r = rectaddpt(r, Pt(-Dx(mousebuttons->r)/2, -Dy(mousebuttons->r)-3));
+		drawop(mousesave, mousesave->r, screen, nil, r.min, S);
+		
+		r1 = rectaddpt(Rect(0, 0, 22, 22), r.min);
+		if(_drawmouse.buttons & 1)
+			drawop(screen, r1, mousebuttons, nil, ZP, S);
+		r1 = rectaddpt(r1, Pt(21, 0));
+		if(_drawmouse.buttons & 2)
+			drawop(screen, r1, mousebuttons, nil, Pt(21, 0), S);
+		r1 = rectaddpt(r1, Pt(21, 0));
+		if(_drawmouse.buttons & 4)
+			drawop(screen, r1, mousebuttons, nil, Pt(42, 0), S);
+		ret = flushimage(d, 2);
+		drawop(screen, r, mousesave, nil, ZP, S);
+		return ret;
+	}
+	
 	if(visible){
 		*d->bufp++ = 'v';	/* five bytes always reserved for this */
 		if(d->_isnewdisplay){
@@ -454,7 +504,8 @@ bufimage(Display *d, int n)
 {
 	uchar *p;
 
-	if(n<0 || n>d->bufsize){
+	if(n<0 || d == nil || n>d->bufsize){
+		abort();
 		werrstr("bad count in bufimage");
 		return 0;
 	}
@@ -466,3 +517,10 @@ bufimage(Display *d, int n)
 	return p;
 }
 
+int
+scalesize(Display *d, int n)
+{
+	if(d == nil || d->dpi <= DefaultDPI)
+		return n;
+	return (n*d->dpi+DefaultDPI/2)/DefaultDPI;
+}
