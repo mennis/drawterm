@@ -1,14 +1,15 @@
-#import <Foundation/NSObjCRuntime.h>
-
-#include "u.h"
-#include "lib.h"
+#include <u.h>
+#include <libc.h>
+#include <draw.h>
+#include <memdraw.h>
+#include "devdraw.h"
 
 enum
 {
 	Nbutton = 10
 };
 
-static int debug = 0;
+static int debug;
 
 static struct
 {
@@ -42,11 +43,11 @@ initmap(void)
 	}
 }
 
-NSUInteger
-mouseswap(NSUInteger but)
+int
+mouseswap(int but)
 {
 	int i;
-	NSUInteger nbut;
+	int nbut;
 
 	if(!map.init)
 		initmap();

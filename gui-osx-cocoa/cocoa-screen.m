@@ -1,7 +1,7 @@
 #define Point OSXPoint
 #define Rect OSXRect
 
-#import "cocoa-screen.h"
+#import "appdelegate.h"
 
 #undef Point
 #undef Rect
@@ -17,7 +17,6 @@
 #include <draw.h>
 #include <memdraw.h>
 #include <keyboard.h>
-
 #include <cursor.h>
 #include "kern/screen.h"
 
@@ -27,13 +26,13 @@
 #include "bigarrow.h"
 #include "docpng.h"
 
-extern int		collecting;
+extern int		alting;
 extern int		kbdputc(Queue*, int);
 extern ulong	msec(void);
 
 extern Cursorinfo cursor;
 
-extern P9AppDelegate *_appdelegate;
+extern AppDelegate *_appdelegate;
 
 #define LOG	if(0)NSLog
 
@@ -121,11 +120,7 @@ dtdefaults()
 	return dict;
 }
 
-@interface P9AppDelegate ()
-@property (strong) NSMenuItem *fsmenuitem;
-@end
-
-@implementation P9AppDelegate
+@implementation AppDelegate
 
 @synthesize arrowCursor = _arrowCursor;
 
@@ -549,7 +544,7 @@ flushmemscreen(Rectangle r)
 
 	/* OS X no longer needs to draw from the main thread */
 	if (floor(NSAppKitVersionNumber) < NSAppKitVersionNumber10_10) {
-		[P9AppDelegate performSelectorOnMainThread:@selector(callflushimg:)
+		[AppDelegate performSelectorOnMainThread:@selector(callflushimg:)
 			withObject:[NSValue valueWithRect:dr]
 			waitUntilDone:YES
 			modes:[NSArray arrayWithObjects:
@@ -650,7 +645,7 @@ autoflushwin(int set)
 		 * timer will not fire during live resizing.
 		 */
 		t = [NSTimer timerWithTimeInterval:0.033
-				target:[P9AppDelegate class]
+				target:[AppDelegate class]
 				selector:@selector(callflushwin:) userInfo:nil
 				repeats:YES];
 		[[NSRunLoop currentRunLoop] addTimer:t forMode:NSRunLoopCommonModes];
@@ -1204,7 +1199,7 @@ sendmouse(void)
 	b = in.kbuttons | in.mbuttons | in.mscroll;
 	mousetrack(dp.x, dp.y, b, msec());
 	in.mscroll = 0;
-	collecting = 0;
+	alting = 0;
 }
 
 void
@@ -1416,7 +1411,7 @@ kicklabel(char *label)
 	if(label == nil)
 		return;
 
-	[P9AppDelegate
+	[AppDelegate
 		performSelectorOnMainThread:@selector(callkicklabel0:)
 		withObject:[NSValue valueWithPointer:label]
 		waitUntilDone:YES];
@@ -1541,7 +1536,7 @@ screeninit(void)
 	 * Create window in main thread, else no cursor
 	 * change while resizing.
 	 */
-	[P9AppDelegate performSelectorOnMainThread:@selector(callmakewin:)
+	[AppDelegate performSelectorOnMainThread:@selector(callmakewin:)
 							 	    withObject:nil
 								 waitUntilDone:YES];
 

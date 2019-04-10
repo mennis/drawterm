@@ -7,7 +7,7 @@ int _drawmsgwrite(void*, int);
 void _initdisplaymemimage(Memimage*);
 int _latin1(Rune*, int);
 int parsewinsize(char*, Rectangle*, int*);
-NSUInteger mouseswap(NSUInteger);
+int mouseswap(int);
 void abortcompose(void);
 
 extern int displaydpi;

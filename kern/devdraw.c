@@ -57,6 +57,7 @@ ulong blanktime = 30;	/* in minutes; a half hour */
 
 struct Draw
 {
+	QLock	lk;
 	int		clientid;
 	int		nclient;
 	Client**	client;
@@ -159,6 +160,7 @@ struct DScreen
 static	Draw		sdraw;
 	QLock	drawlock;
 
+static	Client		*client0;
 static	Memimage	*screenimage;
 static	DImage*	screendimage;
 static	char	screenname[40];
@@ -192,6 +194,51 @@ static	char Enoname[] =	"no image with that name";
 static	char Eoldname[] =	"named image no longer valid";
 static	char Enamed[] = 	"image already has name";
 static	char Ewrongname[] = 	"wrong name for image";
+
+void
+_initdisplaymemimage(Memimage *m)
+{
+	screenimage = m;
+	m->screenref = 1;
+	client0 = mallocz(sizeof(Client), 1);
+	if(client0 == nil){
+		fprint(2, "initdraw: allocating client0: out of memory");
+		abort();
+	}
+	client0->slot = 0;
+	client0->clientid = ++sdraw.clientid;
+	client0->op = SoverD;
+	sdraw.client[0] = client0;
+	sdraw.nclient = 1;
+	sdraw.softscreen = 1;
+}
+
+void
+_drawreplacescreenimage(Memimage *m)
+{
+	/*
+	 * Replace the screen image because the screen
+	 * was resized.
+	 * 
+	 * In theory there should only be one reference
+	 * to the current screen image, and that's through
+	 * client0's image 0, installed a few lines above.
+	 * Once the client drops the image, the underlying backing 
+	 * store freed properly.  The client is being notified
+	 * about the resize through external means, so all we
+	 * need to do is this assignment.
+	 */
+	Memimage *om;
+
+	qlock(&sdraw.lk);
+	om = screenimage;
+	screenimage = m;
+	m->screenref = 1;
+	if(om && --om->screenref == 0){
+		_freememimage(om);
+	}
+	qunlock(&sdraw.lk);
+}
 
 static void
 dlock(void)

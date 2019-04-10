@@ -51,11 +51,12 @@ struct Memimage
 	Memlayer	*layer;	/* nil if not a layer*/
 	ulong	flags;
 
+	void	*X;
+	int		screenref;	/* reference count if this is a screen */
+
 	int		shift[NChan];
 	int		mask[NChan];
 	int		nbits[NChan];
-
-	void	*X;
 };
 
 struct Memcmap
@@ -200,6 +201,7 @@ extern void	_memimagedraw(Memdrawparam*);
 extern void	_memimageline(Memimage*, Point, Point, int, int, int, Memimage*, Point, Rectangle, int);
 extern void	_memmkcmap(void);
 extern void	_memimageinit(void);
+extern void		_drawreplacescreenimage(Memimage*);
 
 /*
  * doprint interface: numbconv bit strings
