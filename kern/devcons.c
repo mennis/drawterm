@@ -20,7 +20,8 @@ enum {
 void	(*consdebug)(void) = nil;
 void	(*screenputs)(char*, int) = nil;
 
-int collecting;
+static int alting;
+
 Queue*	kbdq;			/* unprocessed console input */
 Queue*	lineq;			/* processed console input */
 Queue*	serialoq;		/* serial console output */
@@ -416,6 +417,19 @@ _kbdputc(int c)
 
 void resizeimg(void);
 
+void
+keystroke(int c)
+{
+	kbdputc(kbdq, c);
+}
+
+void
+abortcompose(void)
+{
+	if(alting)
+		keystroke(Kalt);
+}
+
 /* _kbdputc, but with compose translation */
 int
 kbdputc(Queue *q, int c)
@@ -425,11 +439,10 @@ kbdputc(Queue *q, int c)
 	int	i;
 
 	if(c == Kalt){
-		collecting = !collecting;
+		alting = !alting;
 		nk = 0;
 		return 0;
 	}
-	/*
 	if(c == Kcmd+'r') {
 		if(forcedpi)
 			forcedpi = 0;
@@ -440,8 +453,7 @@ kbdputc(Queue *q, int c)
 		resizeimg();
 		return 0;
 	}
-	*/
-	if(!collecting){
+	if(!alting){
 		_kbdputc(c);
 		return 0;
 	}
@@ -450,13 +462,13 @@ kbdputc(Queue *q, int c)
 	k[nk++] = c;
 	c = latin1(k, nk);
 	if(c > 0){
-		collecting = 0;
+		alting = 0;
 		_kbdputc(c);
 		nk = 0;
 		return 0;
 	}
 	if(c == -1){
-		collecting = 0;
+		alting = 0;
 		for(i=0; i<nk; i++)
 			_kbdputc(k[i]);
 		nk = 0;

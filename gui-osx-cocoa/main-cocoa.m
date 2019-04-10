@@ -1,5 +1,5 @@
 #import <Cocoa/Cocoa.h>
-#import "cocoa-screen.h"
+#import "appdelegate.h"
 
 #include "u.h"
 #include "libc.h"
@@ -23,7 +23,7 @@ char *user;
 static int threadargc;
 static char **threadargv;
 
-P9AppDelegate * _appdelegate;
+AppDelegate * _appdelegate;
 
 int main(int argc, char *argv[])
 {
@@ -33,7 +33,7 @@ int main(int argc, char *argv[])
 
 	@autoreleasepool
 	{
-		_appdelegate = [[P9AppDelegate alloc] init];
+		_appdelegate = [[AppDelegate alloc] init];
 		[NSApplication sharedApplication];
 		[NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 		[(NSApplication *)NSApp setDelegate:_appdelegate];
