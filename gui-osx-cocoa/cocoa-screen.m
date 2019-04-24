@@ -898,21 +898,6 @@ interpretdeadkey(NSEvent *e)
 	[t interpretKeyEvents:[NSArray arrayWithObject:e]];
 }
 
-void
-keystroke(int c)
-{
-	kbdputc(kbdq, c);
-}
-
-void
-abortcompose(void)
-{
-	if(alting) {
-		keystroke(Kalt);
-		alting = 0;
-	}
-}
-
 static void
 getkeyboard(NSEvent *e)
 {
