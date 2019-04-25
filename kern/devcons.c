@@ -460,7 +460,7 @@ kbdputc(Queue *q, int c)
 	if(nk >= nelem(k))      // should not happen
 		nk = 0;
 	k[nk++] = c;
-	c = latin1(k, nk);
+	c = _latin1(k, nk);
 	if(c > 0){
 		alting = 0;
 		_kbdputc(c);

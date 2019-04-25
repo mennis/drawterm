@@ -1,31 +1,32 @@
-#include "u.h"
-#include "libc.h"
+#include <u.h>
+#include <libc.h>
+#include <draw.h>
 
 /*
  * The code makes two assumptions: strlen(ld) is 1 or 2; latintab[i].ld can be a
  * prefix of latintab[j].ld only when j<i.
  */
-struct cvlist
+static struct cvlist
 {
 	char	*ld;		/* must be seen before using this conversion */
 	char	*si;		/* options for last input characters */
-	Rune	so[50];		/* the corresponding Rune for each si entry */
+	Rune	so[60];		/* the corresponding Rune for each si entry */
 } latintab[] = {
 #include "latin1.h"
-	0,	0,	{ 0, }
+	0, 0, { 0 }
 };
 
 /*
- * Given n characters 'X' k[1]..k[n-1], find the rune or return -1 for failure.
+ * Given 5 characters k[0]..k[4], find the rune or return -1 for failure.
  */
-long
-unicode(Rune *k, int n)
+static long
+unicode(Rune *k)
 {
 	long i, c;
 
 	k++;	/* skip 'X' */
 	c = 0;
-	for(i=0; i<n-1; i++,k++){
+	for(i=0; i<4; i++,k++){
 		c <<= 4;
 		if('0'<=*k && *k<='9')
 			c += *k-'0';
@@ -36,9 +37,7 @@ unicode(Rune *k, int n)
 		else
 			return -1;
 	}
-	if(c <= Runemax)
-		return c;
-	return -1;
+	return c;
 }
 
 /*
@@ -46,22 +45,20 @@ unicode(Rune *k, int n)
  * failure, or something < -1 if n is too small.  In the latter case, the result
  * is minus the required n.
  */
-static	char	esctab[] = {'X', 5, 'Y', 7};
-
-long
-latin1(Rune *k, int n)
+int
+_latin1(Rune *k, int n)
 {
 	struct cvlist *l;
-	int c, i;
+	int c;
 	char* p;
 
-	for(i = 0; i < nelem(esctab); i += 2)
-		if(k[0] == esctab[i]){
-			if(n>=esctab[i+1])
-				return unicode(k, esctab[i+1]);
-			else
-				return -esctab[i+1];
-		}
+	if(k[0] == 'X'){
+		if(n>=5)
+			return unicode(k);
+		else
+			return -5;
+	}
+	
 	for(l=latintab; l->ld!=0; l++)
 		if(k[0] == l->ld[0]){
 			if(n == 1)
