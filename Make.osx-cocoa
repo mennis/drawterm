@@ -24,7 +24,7 @@ ARCHFLAGS32=-arch i386 -m32
 # any prior versions, just keep the SDK as defined.
 ASFLAGS=
 ARCHFLAGS=
-SDK=$(SDK1012)
+SDK=
 
 PTHREAD=-lpthread	# for Mac
 
