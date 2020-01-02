@@ -52,7 +52,7 @@ typedef uint32_t		uint32;
 #define u64int	p9_u64int
 
 /* #define long int rather than p9_long so that "unsigned long" is valid */
-#define long	int
+// #define long	int
 #define ulong	p9_ulong
 #define vlong	p9_vlong
 #define uvlong	p9_uvlong

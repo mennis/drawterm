@@ -63,7 +63,7 @@ sizebug(void)
 	assert(sizeof(ushort)==2);
 	assert(sizeof(int)==4);
 	assert(sizeof(uint)==4);
-	assert(sizeof(long)==4);
+//	assert(sizeof(long)==4);
 	assert(sizeof(ulong)==4);
 	assert(sizeof(vlong)==8);
 	assert(sizeof(uvlong)==8);
