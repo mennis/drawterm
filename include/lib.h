@@ -1,18 +1,19 @@
-#define nelem(x)	(sizeof(x)/sizeof((x)[0]))
-
 /* avoid name conflicts */
 #define accept	pm_accept
 #define listen  pm_listen
 #define sleep	ksleep
 #define wakeup	kwakeup
+#ifdef strtod
+#undef strtod
+#endif
 #define strtod		fmtstrtod
-
 
 /* conflicts on some os's */
 #define encrypt	libencrypt
 #define decrypt libdecrypt
 #define oserror	liboserror
 #define clone	libclone
+#define atexit	libatexit
 #define log2	liblog2
 #define log	liblog
 #define reboot	libreboot
@@ -56,6 +57,7 @@ typedef uint32_t		uint32;
 #define vlong	p9_vlong
 #define uvlong	p9_uvlong
 
+#define	nelem(x)	(sizeof(x)/sizeof((x)[0]))
 #define SET(x)		((x)=0)
 #define	USED(x)		if(x);else
 
@@ -169,7 +171,7 @@ extern	int	tokenize(char*, char**, int);
 extern	int	getfields(char*, char**, int, int, char*);
 extern	char*	utfecpy(char*, char*, char*);
 
-extern	long	tas(long*);
+extern	int	tas(long*);
 
 typedef
 struct QLock

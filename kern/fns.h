@@ -359,7 +359,7 @@ void		unlock(Lock*);
 uvlong		us2fastticks(uvlong);
 void		userinit(void);
 ulong		userpc(void);
-long		userwrite(char*, int);
+int		userwrite(char*, int);
 // void		validaddr(ulong, ulong, int);
 #define	validaddr(a, b, c)
 void		validname(char*, int);

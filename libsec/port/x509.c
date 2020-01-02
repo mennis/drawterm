@@ -1606,7 +1606,7 @@ static Ints *alg_oid_tab[NUMALGS+1] = {
 	(Ints*)&oid_md5,
 	nil
 };
-static DigestFun digestalg[NUMALGS+1] = { md5, md5, md5, md5, sha1, sha1, md5, nil };
+static DigestFun digestalg[NUMALGS+1] = { md5, md5, md5, md5, sha1, md5, nil };
 
 static void
 freecert(CertX509* c)

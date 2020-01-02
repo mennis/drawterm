@@ -27,6 +27,44 @@ extern	ulong	ntruerand(ulong);		/* uses /dev/random */
 #define	frand	p9frand
 #endif
 
+/*
+ * Time-of-day
+ */
+
+typedef
+struct Tm
+{
+	int	sec;
+	int	min;
+	int	hour;
+	int	mday;
+	int	mon;
+	int	year;
+	int	wday;
+	int	yday;
+	char	zone[4];
+	int	tzoff;
+} Tm;
+
+extern	Tm*	p9gmtime(long);
+extern	Tm*	p9localtime(long);
+extern	char*	p9asctime(Tm*);
+extern	char*	p9ctime(long);
+extern	double	p9cputime(void);
+extern	long	p9times(long*);
+extern	long	p9tm2sec(Tm*);
+// extern	vlong	p9nsec(void);
+
+#ifndef NOPLAN9DEFINES
+#define	gmtime		p9gmtime
+#define	localtime	p9localtime
+#define	asctime		p9asctime
+#define	ctime		p9ctime
+#define	cputime		p9cputime
+#define	times		p9times
+#define	tm2sec		p9tm2sec
+// #define	nsec		p9nsec
+#endif
 
 /*
  * one-of-a-kind
@@ -83,3 +121,9 @@ extern	int	getpid(void);
 extern	int	getppid(void);
 extern	void	rerrstr(char*, uint);
 extern	void	werrstr(char*, ...);
+
+extern	long	p9time(long*);
+
+#ifndef NOPLAN9DEFINES
+#define time		p9time
+#endif

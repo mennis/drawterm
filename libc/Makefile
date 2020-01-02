@@ -65,6 +65,7 @@ UTFOFILES=\
 	convM2D.$O\
 	convM2S.$O\
 	convS2M.$O\
+	ctime.$O\
 	dial.$O\
 	dirfstat.$O\
 	dirfwstat.$O\
@@ -82,7 +83,7 @@ UTFOFILES=\
 	sysfatal.$O\
 	time.$O\
 	truerand.$O\
-
+	zoneinfo.$O\
 
 PORTOFILES=\
 	cleanname.$O\

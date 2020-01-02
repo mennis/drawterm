@@ -82,7 +82,13 @@ enum
 };
 
 #define Enomem Exenomem
+#define Ebadfix Exebadfid
 #define Enotdir Exenotdir
+#define Edupfid Exedupfid
+#define Eopen Exeopen
+#define Exmnt Exexmnt
+#define Emip Exemip
+#define Enopsmt Exenopsmt
 
 extern char Ebadfid[];
 extern char Enotdir[];
@@ -103,7 +109,7 @@ Extern Proc	*Proclist;
 Extern char	psmap[Npsmpt];
 Extern Qidtab	*qidtab[Nqidtab];
 Extern ulong	messagesize;
-Extern int	srvfd;
+Extern int		srvfd;
 
 /* File system protocol service procedures */
 void Xattach(Fsrpc*);
@@ -141,7 +147,7 @@ Qidtab* uniqueqid(Dir*);
 void	freeqid(Qidtab*);
 char*	estrdup(char*);
 void*	emallocz(uint);
-int	readmessage(int, char*, int);
+int		readmessage(int, char*, int);
 void	exclusions(void);
 int	excludefile(char*);
 int	preaddir(Fid*, uchar*, int, vlong);

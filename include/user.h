@@ -19,7 +19,7 @@
 #define pipe	syspipe
 #define rendezvous	sysrendezvous
 #define getpid	sysgetpid
-#define time systime
+// #define time systime
 #define nsec sysnsec
 #define pread syspread
 #define pwrite syspwrite
