@@ -49,7 +49,7 @@ LDFLAGS=$(ARCHFLAGS) $(SDK) -framework Cocoa $(PTHREAD)
 
 OSVERS=$(shell $(ROOT)/mkwsysrules.sh)
 
-ifeq ($(OSVERS), 14)
+ifeq ($(findstring $(OSVERS),13 14), $(OSVERS))
 	LDFLAGS=$(ARCHFLAGS) $(SDK) -framework Cocoa -framework Metal -framework QuartzCore $(PTHREAD)
 endif
 
