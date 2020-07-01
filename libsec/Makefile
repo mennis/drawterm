@@ -54,10 +54,9 @@ OFILES=\
 	sha2block128.$O\
 	smallprimes.$O\
 	smallprimetest.$O\
-
+	tlshand.$O\
+	x509.$O\
 #	thumb.$O\
-#	tlshand.$O\
-#	x509.$O\
 
 default: $(LIB)
 $(LIB): $(OFILES)

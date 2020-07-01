@@ -12,7 +12,7 @@ WSYSOFILES=\
 
 OSVERS=$(shell ../mkwsysrules.sh)
 
-ifeq ($(findstring $(OSVERS), 13 14), $(OSVERS))
+ifeq ($(findstring $(OSVERS), 13 14 15), $(OSVERS))
 	OFILES=$(WSYSOFILES) cocoa-screen-metal-objc.$O
 else
 	OFILES=$(WSYSOFILES) cocoa-screen.$O

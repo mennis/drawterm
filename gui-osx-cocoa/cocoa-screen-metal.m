@@ -41,7 +41,7 @@ AUTOFRAMEWORK(QuartzCore)
 #define LOG	if(0)NSLog
 
 static uint keycvt(uint);
-extern ulong msec(void);
+static uint msec(void);
 static Memimage* initimg(void);
 
 
@@ -163,7 +163,7 @@ Screeninfo	screeninfo;
 		[win center];
 	[win setCollectionBehavior:NSWindowCollectionBehaviorFullScreenPrimary];
 	[win setContentMinSize:NSMakeSize(64,64)];
-
+	[win setOpaque:YES];
 	[win setRestorable:NO];
 	[win setAcceptsMouseMovedEvents:YES];
 	[win setDelegate:myApp];
@@ -183,7 +183,7 @@ Screeninfo	screeninfo;
 	}
 	if(!device)
 		device = MTLCreateSystemDefaultDevice();
-	
+
 	commandQueue = [device newCommandQueue];
 
 	layer = (DrawLayer *)[myContent layer];
@@ -192,6 +192,15 @@ Screeninfo	screeninfo;
 	layer.framebufferOnly = YES;
 	layer.opaque = YES;
 
+	// We use a default transparent layer on top of the CAMetalLayer.
+	// This seems to make fullscreen applications behave.
+	{
+		CALayer *stub = [CALayer layer];
+		stub.frame = CGRectMake(0, 0, 1, 1);
+		[stub setNeedsDisplay];
+		[layer addSublayer:stub];
+	}
+// drawterm
 	renderPass = [MTLRenderPassDescriptor renderPassDescriptor];
 	renderPass.colorAttachments[0].loadAction = MTLLoadActionDontCare;
 	renderPass.colorAttachments[0].storeAction = MTLStoreActionDontCare;
@@ -211,7 +220,6 @@ Screeninfo	screeninfo;
 	pipelineState = [device newRenderPipelineStateWithDescriptor:pipelineDesc error:&error];
 	if(!pipelineState)
 		sysfatal((char *)[[error localizedDescription] UTF8String]);
-
 	[NSEvent setMouseCoalescingEnabled:NO];
 
 	topwin();
@@ -228,12 +236,19 @@ Screeninfo	screeninfo;
 + (void)callsetNeedsDisplayInRect:(NSValue *)v
 {
 	NSRect r;
+	dispatch_time_t time;
 
 	r = [v rectValue];
 	LOG(@"callsetNeedsDisplayInRect(%g, %g, %g, %g)", r.origin.x, r.origin.y, r.size.width, r.size.height);
 	r = [win convertRectFromBacking:r];
 	LOG(@"setNeedsDisplayInRect(%g, %g, %g, %g)", r.origin.x, r.origin.y, r.size.width, r.size.height);
 	[layer setNeedsDisplayInRect:r];
+
+	time = dispatch_time(DISPATCH_TIME_NOW, 16 * NSEC_PER_MSEC);
+	dispatch_after(time, dispatch_get_main_queue(), ^(void){
+		[layer setNeedsDisplayInRect:r];
+	});
+
 	[myContent enlargeLastInputRect:r];
 }
 
@@ -252,7 +267,7 @@ struct Cursors {
 	NSImage *i;
 	NSPoint p;
 	uchar *plane[5], *plane2[5];
-	int b;
+	uint b;
 
 	cs = [v pointerValue];
 	c = cs->c;
@@ -387,6 +402,13 @@ struct Cursors {
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)theApplication {
 	return YES;
+}
+
+- (void)windowDidResize:(NSNotification *)notification
+{
+	if(![myContent inLiveResize] && img) {
+		resizeimg();
+	}
 }
 
 - (void)windowDidBecomeKey:(id)arg
@@ -587,13 +609,15 @@ struct Cursors {
 - (void)viewDidEndLiveResize
 {
 	[super viewDidEndLiveResize];
-	resizeimg();
+	if(img)
+		resizeimg();
 }
 
 - (void)viewDidChangeBackingProperties
 {
 	[super viewDidChangeBackingProperties];
-	resizeimg();
+	if(img)
+		resizeimg();
 }
 
 // conforms to protocol NSTextInputClient
@@ -1283,7 +1307,6 @@ resizewindow(Rectangle r)
 
 		s = [myContent convertSizeFromBacking:NSMakeSize(Dx(r), Dy(r))];
 		[win setContentSize:s];
-		resizeimg();
 	});
 }
 
