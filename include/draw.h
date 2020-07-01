@@ -183,9 +183,11 @@ struct Display
 	QLock		qlock;
 	int		locking;	/*program is using lockdisplay */
 	int		dirno;
+
 	int		fd;
 	int		reffd;
 	int		ctlfd;
+
 	int		imageid;
 	int		local;
 	void		(*error)(Display*, char*);
@@ -193,14 +195,17 @@ struct Display
 	char		*windir;
 	char		oldlabel[64];
 	u32int		dataqid;
+	Image		*image;
 	Image		*white;
 	Image		*black;
 	Image		*opaque;
 	Image		*transparent;
-	Image		*image;
 	uchar		*buf;
 	int		bufsize;
 	uchar		*bufp;
+	uchar		*obuf;
+	int		obufsize;
+	uchar		*obufp;
 	Font		*defaultfont;
 	Subfont		*defaultsubfont;
 	Image		*windows;
@@ -372,7 +377,8 @@ extern int	writeimage(int, Image*, int);
 extern Image*	namedimage(Display*, char*);
 extern int	nameimage(Image*, char*, int);
 extern Image* allocimagemix(Display*, u32int, u32int);
-
+extern int	drawsetlabel(char*);
+extern int	scalesize(Display*, int);
 /*
  * Colors
  */
@@ -508,6 +514,8 @@ extern Subfont*	getdefont(Display*);
 extern void		lockdisplay(Display*);
 extern void	unlockdisplay(Display*);
 extern int		drawlsetrefresh(u32int, int, void*, void*);
+extern void	loadhidpi(Font*);
+extern void	swapfont(Font*, Font**, Font**);
 
 /*
  * Predefined 

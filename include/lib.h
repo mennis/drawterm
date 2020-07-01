@@ -7,6 +7,7 @@
 #undef strtod
 #endif
 #define strtod		fmtstrtod
+
 /* conflicts on some os's */
 #define encrypt	libencrypt
 #define decrypt libdecrypt

@@ -44,15 +44,18 @@ static uint keycvt(uint);
 static uint msec(void);
 static Memimage* initimg(void);
 
+@class DevDrawView;
+@class DrawLayer;
 
-@interface AppDelegate : NSObject<NSApplicationDelegate,NSWindowDelegate>
+@interface AppDelegate : NSObject<NSApplicationDelegate>
 + (void)callservep9p:(id)arg;
 + (void)makewin:(NSValue *)v;
 + (void)callkicklabel:(NSString *)v;
 + (void)callsetNeedsDisplayInRect:(NSValue *)v;
 + (void)callsetcursor:(NSValue *)v;
 @end
-@interface DevDrawView : NSView<NSTextInputClient>
+
+@interface DevDrawView : NSView<NSTextInputClient,NSWindowDelegate>
 - (void)clearInput;
 - (void)getmouse:(NSEvent *)e;
 - (void)sendmouse:(NSUInteger)b;
@@ -70,9 +73,9 @@ static NSCursor *currentCursor = NULL;
 static NSCursor* makecursor(Cursor*);
 
 static DrawLayer *layer;
-static MTLRenderPassDescriptor *renderPass;
+//static MTLRenderPassDescriptor *renderPass;
 static id<MTLDevice> device;
-static id<MTLRenderPipelineState> pipelineState;
+//static id<MTLRenderPipelineState> pipelineState;
 static id<MTLCommandQueue> commandQueue;
 static id<MTLTexture> texture;
 
@@ -80,6 +83,7 @@ static Memimage *img = NULL;
 
 static QLock snarfl;
 
+/*
 static NSString *const metal =
 @"#include<metal_stdlib>\n"
 "using namespace metal;\n"
@@ -104,7 +108,7 @@ static NSString *const metal =
 "	constexpr sampler s;\n"
 "	return texture.sample(s, in.tCoord);\n"
 "}";
-
+*/
 extern Cursorinfo cursor;
 
 Memimage	*gscreen;
@@ -134,10 +138,10 @@ Screeninfo	screeninfo;
 		| NSWindowStyleMaskMiniaturizable
 		| NSWindowStyleMaskResizable;
 
+	s = [v pointerValue];
 	sr = [[NSScreen mainScreen] frame];
 	r = [[NSScreen mainScreen] visibleFrame];
 
-	s = [v pointerValue];
 	LOG(@"makewin(%s)", s);
 	if(s && *s){
 		if(parsewinsize(s, &wr, &set) < 0)
@@ -201,6 +205,7 @@ Screeninfo	screeninfo;
 		[layer addSublayer:stub];
 	}
 // drawterm
+	/*
 	renderPass = [MTLRenderPassDescriptor renderPassDescriptor];
 	renderPass.colorAttachments[0].loadAction = MTLLoadActionDontCare;
 	renderPass.colorAttachments[0].storeAction = MTLStoreActionDontCare;
@@ -220,6 +225,8 @@ Screeninfo	screeninfo;
 	pipelineState = [device newRenderPipelineStateWithDescriptor:pipelineDesc error:&error];
 	if(!pipelineState)
 		sysfatal((char *)[[error localizedDescription] UTF8String]);
+//
+*/
 	[NSEvent setMouseCoalescingEnabled:NO];
 
 	topwin();
@@ -596,7 +603,10 @@ struct Cursors {
 	xy = mousexy();
 	dp = Pt(p.x - xy.x, p.y - xy.y);
 	LOG(@"(%d, %d) <- sendmouse(%d)", dp.x, dp.y, (uint)b);
-	mousetrack(dp.x, dp.y, b, msec());
+	LOG(@"(%g, %g) <- sendmouse(%d)", p.x, p.y, (uint)b);
+	// mousetrack(dp.x, dp.y, b, msec());
+	mousetrack(p.x, p.y, b, msec());
+
 	if(b && _lastInputRect.size.width && _lastInputRect.size.height)
 		[self resetLastInputRect];
 }
@@ -835,7 +845,8 @@ struct Cursors {
 - (void)display
 {
 	id<MTLCommandBuffer> cbuf;
-	id<MTLRenderCommandEncoder> cmd;
+//	id<MTLRenderCommandEncoder> cmd;
+	id<MTLBlitCommandEncoder> blit;
 
 	LOG(@"display");
 
@@ -855,13 +866,25 @@ struct Cursors {
 
 	LOG(@"display got drawable");
 
-	renderPass.colorAttachments[0].texture = drawable.texture;
+//	renderPass.colorAttachments[0].texture = drawable.texture;
 
-	cmd = [cbuf renderCommandEncoderWithDescriptor:renderPass];
-	[cmd setRenderPipelineState:pipelineState];
-	[cmd setFragmentTexture:texture atIndex:0];
-	[cmd drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
-	[cmd endEncoding];
+//	cmd = [cbuf renderCommandEncoderWithDescriptor:renderPass];
+//	[cmd setRenderPipelineState:pipelineState];
+//	[cmd setFragmentTexture:texture atIndex:0];
+//	[cmd drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+//	[cmd endEncoding];
+
+	blit = [cbuf blitCommandEncoder];
+	[blit copyFromTexture:texture
+		sourceSlice:0
+		sourceLevel:0
+		sourceOrigin:MTLOriginMake(0, 0, 0)
+		sourceSize:MTLSizeMake(texture.width, texture.height, texture.depth)
+		toTexture:drawable.texture
+		destinationSlice:0
+		destinationLevel:0
+		destinationOrigin:MTLOriginMake(0, 0, 0)];
+	[blit endEncoding];
 
 	[cbuf presentDrawable:drawable];
 	drawable = nil;
@@ -879,6 +902,12 @@ struct Cursors {
 }
 
 @end
+
+static uint
+msec(void)
+{
+	return nsec()/1000000;
+}
 
 static uint
 keycvt(uint code)
@@ -965,7 +994,7 @@ keycvt(uint code)
 Memimage*
 _attachscreen(char *label, char *winsize)
 {
-	LOG(@"attachscreen(%s, %s)", label, winsize);
+	LOG(@"_attachscreen(%s, %s)", label, winsize);
 	[AppDelegate
 		performSelectorOnMainThread:@selector(makewin:)
 		withObject:[NSValue valueWithPointer:winsize]
@@ -999,16 +1028,30 @@ attachscreen(Rectangle *r, ulong *chan, int *depth, int *width, int *softscreen,
 	return gscreen->data->bdata;
 }
 
+/*
+ * Rio/blit assume 100dpi, we need to calibrate the views to behave that way.
+ */
+
 static Memimage*
 initimg(void)
 {
 @autoreleasepool{
+	NSDictionary *description = [[win screen] deviceDescription];
+	NSSize displayPixelSize = [[description objectForKey:NSDeviceSize] sizeValue];
+	CGSize displayPhysicalSize = CGDisplayScreenSize(
+            [[description objectForKey:@"NSScreenNumber"] unsignedIntValue]);
+	CGFloat dpi = ((displayPixelSize.width / displayPhysicalSize.width) * 25.4f); 
+
 	CGFloat scale;
-	NSSize size;
+	NSSize size, scaledSize;
 	MTLTextureDescriptor *textureDesc;
 
+	displaydpi = [[win.deviceDescription valueForKey:NSDeviceResolution] sizeValue].width;
+
+	scale = displaydpi / 96.0f;
 	size = [myContent convertSizeToBacking:[myContent bounds].size];
-	mouserect = Rect(0, 0, size.width, size.height);
+	scaledSize = NSMakeSize(size.width / scale, size.height / scale);
+	mouserect = Rect(0, 0, scaledSize.width, scaledSize.height);
 
 	LOG(@"initimg %.0f %.0f", size.width, size.height);
 
@@ -1020,24 +1063,18 @@ initimg(void)
 
 	textureDesc = [MTLTextureDescriptor
 		texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
-		width:size.width
-		height:size.height
+		width:scaledSize.width
+		height:scaledSize.height
 		mipmapped:NO];
 	textureDesc.allowGPUOptimizedContents = YES;
 	textureDesc.usage = MTLTextureUsageShaderRead;
 	textureDesc.cpuCacheMode = MTLCPUCacheModeWriteCombined;
 	texture = [device newTextureWithDescriptor:textureDesc];
 
-	scale = [win backingScaleFactor];
-	[layer setDrawableSize:size];
+	[layer setDrawableSize:scaledSize];
 	[layer setContentsScale:scale];
 
-	// NOTE: This is not really the display DPI.
-	// On retina, scale is 2; otherwise it is 1.
-	// This formula gives us 220 for retina, 110 otherwise.
-	// That's not quite right but it's close to correct.
-	// https://en.wikipedia.org/wiki/Retina_display#Models
-	displaydpi = scale * 110;
+printf("dpi: %d %f\n", displaydpi, dpi);
 }
 	LOG(@"initimg return");
 
@@ -1091,8 +1128,9 @@ setmouse(Point p)
 		LOG(@"(%g, %g) <- fromBacking", q.x, q.y);
 		q = [myContent convertPoint:q toView:nil];
 		LOG(@"(%g, %g) <- toWindow", q.x, q.y);
-		q = [win convertPointToScreen:q];
-		LOG(@"(%g, %g) <- toScreen", q.x, q.y);
+		// q = [win convertPointToScreen:q];
+		q = [win convertPointToBacking:q];
+		LOG(@"(%g, %g) <- toBacking", q.x, q.y);
 		// Quartz has the origin of the "global display
 		// coordinate space" at the top left of the primary
 		// screen with y increasing downward, while Cocoa has
@@ -1100,7 +1138,7 @@ setmouse(Point p)
 		// with y increasing upward.  We flip the coordinate
 		// with a negative sign and shift upward by the height
 		// of the primary screen.
-		q.y = NSScreen.screens[0].frame.size.height - q.y;
+		q.y = [NSScreen mainScreen].frame.size.height - q.y;
 		LOG(@"(%g, %g) <- setmouse", q.x, q.y);
 		CGWarpMouseCursorPosition(NSPointToCGPoint(q));
 		CGAssociateMouseAndMouseCursorPosition(true);
@@ -1238,8 +1276,8 @@ screeninit(void)
 	 * change while resizing.
 	 */
 	[AppDelegate performSelectorOnMainThread:@selector(makewin:)
-							 	    withObject:nil
-								 waitUntilDone:YES];
+							 	  withObject:nil
+							   waitUntilDone:YES];
 
 	memimageinit();
 	setcursors(nil, nil);

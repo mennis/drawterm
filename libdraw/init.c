@@ -210,7 +210,9 @@ gengetwindow(Display *d, char *winname, Image **winp, Screen **scrp, int ref)
 	}
 	d->screenimage = *winp;
 	assert((*winp)->chan != 0);
-	return 1;
+
+	
+	return 0;
 }
 
 int
