@@ -38,7 +38,6 @@ OFILES=\
 	term.$O\
 	uart.$O\
 	waserror.$O\
-	winsize.$O\
 	$(OS).$O
 
 default: $(LIB)

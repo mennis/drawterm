@@ -1,15 +1,5 @@
-# Mac OS X Cocoa version
-#   available for SDK Mac OS X 10.7 to 10.11
-
-SDK107=-isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.7.sdk -mmacosx-version-min=10.7
-
-SDK108=-isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.8.sdk -mmacosx-version-min=10.8
-
-SDK109=-isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk -mmacosx-version-min=10.9
-
-SDK1010=-isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.10.sdk -mmacosx-version-min=10.7
-
-SDK1011=-isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk -mmacosx-version-min=10.7
+# macOS
+#   available for macOS SDK supporting 10.15.x and 11 and Xcode 12.x
 
 SDK1012=-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
 
@@ -33,7 +23,7 @@ AS=clang -c $(ARCHFLAGS)
 RANLIB=ranlib
 O=o
 OS=posix
-GUI=osx-cocoa
+GUI=macos
 TARG=drawterm
 AUDIO=none
 
@@ -41,19 +31,16 @@ AUDIO=none
 
 CC=clang
 CFLAGS=$(WARNINGS) $(ARCHFLAGS) $(SDK) -fwritable-strings -g -O0 -I. -I$(ROOT)\
-	-I$(ROOT)/include -I$(ROOT)/kern -I$(ROOT)/gui-osx-cocoa -c \
+	-I$(ROOT)/include -I$(ROOT)/kern -I$(ROOT)/gui-macos -c \
 	-D_THREAD_SAFE -DPTHREAD -DCOCOA
 
 LDADD=-g
-LDFLAGS=$(ARCHFLAGS) $(SDK) -framework Cocoa $(PTHREAD)
-
-OSVERS=$(shell $(ROOT)/osxminver.sh)
-
-ifeq ($(findstring $(OSVERS),13 14 15), $(OSVERS))
-	LDFLAGS=$(ARCHFLAGS) $(SDK) -framework Cocoa -framework Metal -framework QuartzCore $(PTHREAD)
-endif
+LDFLAGS=$(ARCHFLAGS) $(SDK) -framework Cocoa -framework Metal \
+	-framework QuartzCore -framework CoreFoundation $(PTHREAD)
 
 MAINO=
+
+LIBS=$(LIBS1) libmachdep.a
 
 all: default
 

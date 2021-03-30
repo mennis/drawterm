@@ -132,17 +132,17 @@ $(LIB): $(OFILES)
 	$(RANLIB) $(LIB)
 
 %.$O: %.c
-	$(CC) $(CFLAGS) $*.c
+	$(CC) $(CFLAGS) $<
 
 %.$O: fmt/%.c
-	$(CC) $(CFLAGS) -Ifmt fmt/$*.c
+	$(CC) $(CFLAGS) -Ifmt $<
 
 %.$O: utf/%.c
-	$(CC) $(CFLAGS) -Iutf utf/$*.c
+	$(CC) $(CFLAGS) -Iutf $<
 
 %.$O: 9sys/%.c
-	$(CC) $(CFLAGS) 9sys/$*.c
+	$(CC) $(CFLAGS) $<
 
 %.$O: port/%.c
-	$(CC) $(CFLAGS) -Ifmt port/$*.c
+	$(CC) $(CFLAGS) -Ifmt $<
 

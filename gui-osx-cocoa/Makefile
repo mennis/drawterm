@@ -10,7 +10,7 @@ WSYSOFILES=\
 	mouseswap.$O\
 	main-cocoa.$O
 
-OSVERS=$(shell ../mkwsysrules.sh)
+OSVERS=$(shell ../osxminver.sh)
 
 ifeq ($(findstring $(OSVERS), 13 14 15), $(OSVERS))
 	OFILES=$(WSYSOFILES) cocoa-screen-metal-objc.$O

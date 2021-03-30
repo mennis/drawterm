@@ -64,4 +64,4 @@ $(LIB): $(OFILES)
 	$(RANLIB) $(LIB)
 
 %.$O: port/%.c
-	$(CC) $(CFLAGS) port/$*.c
+	$(CC) $(CFLAGS) $<

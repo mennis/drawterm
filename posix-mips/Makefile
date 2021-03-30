@@ -14,10 +14,10 @@ $(LIB): $(OFILES)
 	$(RANLIB) $(LIB)
 
 %.$O: %.c
-	$(CC) $(CFLAGS) $*.c
+	$(CC) $(CFLAGS) $<
 
 %.$O: %.s
-	$(AS) $(ASFLAGS) -o $*.$O $*.s
+	$(AS) $(ASFLAGS) -o $@ $<
 
 %.s: %.spp
 	cpp $*.spp >$*.s
