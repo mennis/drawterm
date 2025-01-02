@@ -61,6 +61,7 @@ UTFOFILES=\
 
 9SYSOFILES=\
 	announce.$O\
+	await.$O\
 	convD2M.$O\
 	convM2D.$O\
 	convM2S.$O\
@@ -83,6 +84,7 @@ UTFOFILES=\
 	sysfatal.$O\
 	time.$O\
 	truerand.$O\
+	wait.$O\
 	zoneinfo.$O\
 
 PORTOFILES=\
@@ -93,7 +95,9 @@ PORTOFILES=\
 	getfields.$O\
 	lnrand.$O\
 	lock.$O\
+	lrand.$O\
 	netmkaddr.$O\
+	nrand.$O\
 	rand.$O\
 	readn.$O\
 	rune.$O\
@@ -132,17 +136,17 @@ $(LIB): $(OFILES)
 	$(RANLIB) $(LIB)
 
 %.$O: %.c
-	$(CC) $(CFLAGS) $<
+	$(CC) $(CFLAGS) $*.c
 
 %.$O: fmt/%.c
-	$(CC) $(CFLAGS) -Ifmt $<
+	$(CC) $(CFLAGS) -Ifmt fmt/$*.c
 
 %.$O: utf/%.c
-	$(CC) $(CFLAGS) -Iutf $<
+	$(CC) $(CFLAGS) -Iutf utf/$*.c
 
 %.$O: 9sys/%.c
-	$(CC) $(CFLAGS) $<
+	$(CC) $(CFLAGS) 9sys/$*.c
 
 %.$O: port/%.c
-	$(CC) $(CFLAGS) -Ifmt $<
+	$(CC) $(CFLAGS) -Ifmt port/$*.c
 

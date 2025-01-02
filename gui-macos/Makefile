@@ -8,9 +8,12 @@ OFILES=\
 	draw.$O\
 	load.$O\
 	mouseswap.$O\
-	screen.$O\
-	srv.$O\
-	main.$O
+	main.$O\
+	screen.$O
+
+check:
+	echo $(OSVERS)
+	echo $(OFILES)
 
 default: $(LIB)
 $(LIB): $(OFILES)
@@ -18,10 +21,10 @@ $(LIB): $(OFILES)
 	$(RANLIB) $(LIB)
 
 %.$O: %.c
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) $*.c
 
 screen.$O: screen.m
-	$(CC) $(CFLAGS) -fobjc-arc -o screen.$O screen.m
+	$(CC) $(CFLAGS) -fobjc-arc -o $*.$O $*.m
 
 %.$O: %.m
-	$(CC) $(CFLAGS) -fobjc-arc -o $@ $<
+	$(CC) $(CFLAGS) $*.m

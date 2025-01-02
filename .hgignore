@@ -8,6 +8,7 @@ syntax:regexp
 (^|/)\.hg($|/)
 (^|/)\.hgtags($|/)
 (^|/)build($|)
+(^|/)DerivedData($|/)
 \.pbxuser$
 ^drawterm.log$
 ^drawterm

@@ -8,13 +8,9 @@ updates bring drawterm in line with recent changes in the Plan 9 source,
 specifically:
 
 - libc restructured and updated
-
 - libdraw, libmemdraw, and libmemlayer sources updated
-
 - modified kern files bringing in Plan 9 sys/src/9/port updates
-
 - UTF and Rune updates from Coraid
-
 - devdraw now allows window resize
 
 The new Mac OS X 10.8 full-screen mode is not always the best mechanism for
@@ -45,6 +41,8 @@ INSTALLATION
 --------------
 To build on Mac OS X 10.8, run make 'CONF=osx-cocoa'.
 
+To build on macOS 11+, run make 'CONF=macos'.
+
 To build on Unix, run CONF=unix make.
 
 To build on Solaris using Sun cc, run CONF=sun make.
@@ -64,13 +62,13 @@ I cross-compile using mingw32 on Linux.
 
 BINARIES
 ---------
-See https://bitbucket.org/jas/drawterm-cocoa/downloads
+See https://bitbucket.org/jas/drawterm-cocoa/downloads [dead]
 
 
 SOURCE
 ------
-Use Mercurial: hg clone https://bitbucket.org/jas/drawterm-cocoa
-On the web at https://bitbucket.org/jas/drawterm-cocoa/downloads
+Use Mercurial [dead]: hg clone https://bitbucket.org/jas/drawterm-cocoa
+Now on github: https://github.com/vat9/drawterm
 In the Plan 9 distribution: /sys/src/cmd/unix/drawterm/ (sometimes out of date)
 
 
@@ -84,6 +82,4 @@ TO DO:
 
 - Should copy 9term code and make console window a real
 	9term window instead.
-
-- Should implement /dev/label.
 

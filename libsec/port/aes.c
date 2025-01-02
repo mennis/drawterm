@@ -34,7 +34,8 @@
 #include <libsec.h>
 
 typedef uchar	u8;
-typedef u32int	u32;
+typedef ulong	u32;
+
 #define FULL_UNROLL
 #define const
 
@@ -60,8 +61,8 @@ static uchar basekey[3][16] = {
 
 static int aes_setupEnc(ulong rk[/*4*(Nr + 1)*/], const uchar cipherKey[],
 		int keyBits);
-//static int aes_setupDec(ulong rk[/*4*(Nr + 1)*/], const uchar cipherKey[],
-//		int keyBits);
+static int aes_setupDec(ulong rk[/*4*(Nr + 1)*/], const uchar cipherKey[],
+		int keyBits);
 static int aes_setup(ulong erk[/*4*(Nr + 1)*/], ulong drk[/*4*(Nr + 1)*/],
 		const uchar cipherKey[], int keyBits);
 
@@ -1248,7 +1249,7 @@ static int
 aes_setupDec(ulong rk[/* 4*(Nr + 1) */], const uchar cipherKey[], int keyBits)
 {
 	int Nr, i, j;
-	u32 temp;
+	ulong temp;
 
 	/* expand the cipher key: */
 	Nr = aes_setupEnc(rk, cipherKey, keyBits);
@@ -1294,7 +1295,7 @@ void
 aes_encrypt(const ulong rk[/* 4*(Nr + 1) */], int Nr, const uchar pt[16],
 	uchar ct[16])
 {
-	u32 s0, s1, s2, s3, t0, t1, t2, t3;
+	ulong s0, s1, s2, s3, t0, t1, t2, t3;
 #ifndef FULL_UNROLL
 	int r;
 #endif /* ?FULL_UNROLL */
@@ -1477,7 +1478,7 @@ void
 aes_decrypt(const ulong rk[/* 4*(Nr + 1) */], int Nr, const uchar ct[16],
 	uchar pt[16])
 {
-	u32 s0, s1, s2, s3, t0, t1, t2, t3;
+	ulong s0, s1, s2, s3, t0, t1, t2, t3;
 #ifndef FULL_UNROLL
 	int r;
 #endif		/* ?FULL_UNROLL */

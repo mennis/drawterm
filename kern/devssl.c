@@ -8,8 +8,9 @@
 #include	"fns.h"
 #include	"error.h"
 
-#include	"libsec.h"
+#include	<libsec.h>
 
+#define DEPRECATED 1		/* include rc4 while retiring it */
 #define NOSPOOKS 1
 
 typedef struct OneWay OneWay;
@@ -37,7 +38,7 @@ enum
 	Noencryption=	0,
 	DESCBC=		1,
 	DESECB=		2,
-	RC4=		3
+	RC4=		3		/* deprecated */
 };
 
 typedef struct Dstate Dstate;
@@ -51,7 +52,7 @@ struct Dstate
 	ushort	blocklen;	/* blocking length */
 
 	ushort	diglen;		/* length of digest */
-	DigestState *(*hf)(uchar*, ulong, uchar*, DigestState*);	/* hash func */
+	DigestState *(*hf)(uchar*, ulong, uchar*, DigestState*); /* hash func */
 
 	/* for SSL format */
 	int	max;		/* maximum unpadded data per msg */
@@ -112,7 +113,6 @@ static void	sslhangup(Dstate*);
 static Dstate*	dsclone(Chan *c);
 static void	dsnew(Chan *c, Dstate **);
 static long	sslput(Dstate *s, Block * volatile b);
-
 /*
 char *sslnames[] = {
 [Qclonus]	"clone",
@@ -124,7 +124,6 @@ char *sslnames[] = {
 [Qhashalgs]	"hashalgs",
 };
 */
-
 char *sslnames[] = {
 	/* unused */ 0,
 	/* topdir */ 0,
@@ -138,8 +137,9 @@ char *sslnames[] = {
 	"encalgs",
 	"hashalgs",
 };
+
 static int
-sslgen(Chan *c, char *n, Dirtab *d, int nd, int s, Dir *dp)
+sslgen(Chan *c, char*n, Dirtab *d, int nd, int s, Dir *dp)
 {
 	Qid q;
 	Dstate *ds;
@@ -184,7 +184,7 @@ sslgen(Chan *c, char *n, Dirtab *d, int nd, int s, Dir *dp)
 			else
 				nm = eve;
 			if(dsname[s] == nil){
-				sprint(name, "%d", s);
+				snprint(name, sizeof name, "%d", s);
 				kstrdup(&dsname[s], name);
 			}
 			devdir(c, q, dsname[s], 0, nm, 0555, dp);
@@ -249,7 +249,6 @@ sslgen(Chan *c, char *n, Dirtab *d, int nd, int s, Dir *dp)
 		devdir(c, c->qid, sslnames[TYPE(c->qid)], 0, nm, 0660, dp);
 		return 1;
 	}
-	return -1;
 }
 
 static Chan*
@@ -370,7 +369,7 @@ sslwstat(Chan *c, uchar *db, int n)
 
 	if(!emptystr(dir->uid))
 		kstrdup(&s->user, dir->uid);
-	if(dir->mode != (ulong)-1)
+	if(dir->mode != ~0UL)
 		s->perm = dir->mode;
 
 	free(dir);
@@ -689,7 +688,7 @@ sslread(Chan *c, void *a, long n, vlong off)
 		error(Ebadusefd);
 	case Qctl:
 		ft = CONV(c->qid);
-		sprint(buf, "%d", ft);
+		snprint(buf, sizeof buf, "%d", ft);
 		return readstr(offset, a, n, buf);
 	case Qdata:
 		b = sslbread(c, n, offset);
@@ -729,8 +728,7 @@ static void
 randfill(uchar *buf, int len)
 {
 	while(len-- > 0)
-		*buf++ = fastrand();
-//		*buf++ = nrand(256);
+		*buf++ = fastrand();	// nrand(256);
 }
 
 static long
@@ -935,6 +933,7 @@ initRC4key(OneWay *w)
 	setupRC4state(w->state, w->secret, w->slen);
 }
 
+#ifdef DEPRECATED
 /*
  *  40 bit RC4 is the same as n-bit RC4.  However,
  *  we ignore all but the first 40 bits of the key.
@@ -955,6 +954,7 @@ initRC4key_40(OneWay *w)
 		error(Enomem);
 	setupRC4state(w->state, w->secret, w->slen);
 }
+#endif
 
 /*
  *  128 bit RC4 is the same as n-bit RC4.  However,
@@ -977,7 +977,6 @@ initRC4key_128(OneWay *w)
 	setupRC4state(w->state, w->secret, w->slen);
 }
 
-
 typedef struct Hashalg Hashalg;
 struct Hashalg
 {
@@ -992,6 +991,7 @@ Hashalg hashtab[] =
 	{ "md5", MD5dlen, md5, },
 	{ "sha1", SHA1dlen, sha1, },
 	{ "sha", SHA1dlen, sha1, },
+	{ "sha2_512", SHA2_512dlen, sha2_512, },
 	{ 0 }
 };
 
@@ -1024,16 +1024,20 @@ struct Encalg
 #ifdef NOSPOOKS
 Encalg encrypttab[] =
 {
-	{ "descbc", 8, DESCBC, initDESkey, },           /* DEPRECATED -- use des_56_cbc */
-	{ "desecb", 8, DESECB, initDESkey, },           /* DEPRECATED -- use des_56_ecb */
+	{ "descbc", 8, DESCBC, initDESkey, },	/* DEPRECATED -- use des_56_cbc */
+	{ "desecb", 8, DESECB, initDESkey, },	/* DEPRECATED -- use des_56_ecb */
 	{ "des_56_cbc", 8, DESCBC, initDESkey, },
 	{ "des_56_ecb", 8, DESECB, initDESkey, },
 	{ "des_40_cbc", 8, DESCBC, initDESkey_40, },
 	{ "des_40_ecb", 8, DESECB, initDESkey_40, },
-	{ "rc4", 1, RC4, initRC4key_40, },              /* DEPRECATED -- use rc4_X      */
-	{ "rc4_256", 1, RC4, initRC4key, },
-	{ "rc4_128", 1, RC4, initRC4key_128, },
+#ifdef DEPRECATED
+	{ "rc4", 1, RC4, initRC4key_40, },	/* DEPRECATED -- use rc4_X */
 	{ "rc4_40", 1, RC4, initRC4key_40, },
+#endif
+	/* needed for secstore, libsec/tlshand.c? */
+	{ "rc4_128", 1, RC4, initRC4key_128, },
+	/* used by cpu (drawterm), import, exportfs, secstore for plan 9 auth */
+	{ "rc4_256", 1, RC4, initRC4key, },
 	{ 0 }
 };
 #else
@@ -1041,8 +1045,10 @@ Encalg encrypttab[] =
 {
 	{ "des_40_cbc", 8, DESCBC, initDESkey_40, },
 	{ "des_40_ecb", 8, DESECB, initDESkey_40, },
-	{ "rc4", 1, RC4, initRC4key_40, },              /* DEPRECATED -- use rc4_X      */
-	{ "rc4_40", 1, RC4, initRC4key_40, },
+#ifdef DEPRECATED
+	{ "rc4", 1, RC4, initRC4key_40, },	/* DEPRECATED -- use rc4_X */
+	{ "rc4_40", 1, RC4, initRC4key_40, },	/* DEPRECATED */
+#endif
 	{ 0 }
 };
 #endif /* NOSPOOKS */
@@ -1322,9 +1328,11 @@ encryptb(Dstate *s, Block *b, int offset)
 			memmove(ds->ivec, p, 8);
 		}
 		break;
+#ifdef DEPRECATED
 	case RC4:
 		rc4(s->out.state, b->rp + offset, BLEN(b) - offset);
 		break;
+#endif
 	}
 	return b;
 }
@@ -1373,9 +1381,11 @@ decryptb(Dstate *s, Block *bin)
 				}
 			}
 			break;
+#ifdef DEPRECATED
 		case RC4:
 			rc4(s->in.state, b->rp, BLEN(b));
 			break;
+#endif
 		}
 	}
 	return bin;

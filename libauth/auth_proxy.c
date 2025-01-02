@@ -162,7 +162,8 @@ fauth_proxy(int fd, AuthRpc *rpc, AuthGetkey *getkey, char *params)
 				m = read(fd, buf + n, atoi(rpc->arg) - n);
 				if(m <= 0){
 					if(m == 0)
-						werrstr("auth_proxy short read: %s", buf);
+						werrstr("auth_proxy short read: %s",
+							buf);
 					goto Error;
 				}
 				n += m;

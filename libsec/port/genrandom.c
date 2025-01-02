@@ -1,5 +1,4 @@
 #include "os.h"
-#include	"kern/mem.h"
 #include <mp.h>
 #include <libsec.h>
 

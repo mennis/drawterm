@@ -1,5 +1,7 @@
 #define _MPINT 1
 
+typedef uint mpdigit;
+
 /*
  * the code assumes mpdigit to be at least an int
  * mpdigit must be an atomic type.  mpdigit is defined

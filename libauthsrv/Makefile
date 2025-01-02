@@ -23,4 +23,5 @@ $(LIB): $(OFILES)
 	$(RANLIB) $(LIB)
 
 %.$O: %.c
-	$(CC) $(CFLAGS) $<
+	$(CC) $(CFLAGS) $*.c
+

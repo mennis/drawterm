@@ -1,9 +1,5 @@
-# macOS
-#   available for macOS SDK supporting 10.15.x and 11 and Xcode 12.x
-
-SDK1012=-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
-
-SDK10=-isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+# macOS version using Metal
+#   available for SDK Mac OS X 10.11+
 
 ARCHFLAGS64=-arch x86_64 -m64
 ARCHFLAGS32=-arch i386 -m32
@@ -12,8 +8,7 @@ ARCHFLAGS32=-arch i386 -m32
 # The SDK can be left blank to use the default SDK for your platform, e.g.,
 # on a 10.9 machine with the latest Xcode that you don't need to run on
 # any prior versions, just keep the SDK as defined.
-ASFLAGS=
-ARCHFLAGS=
+ARCHFLAGS=-arch x86_64 -m64
 SDK=
 
 PTHREAD=-lpthread	# for Mac
@@ -35,22 +30,19 @@ CFLAGS=$(WARNINGS) $(ARCHFLAGS) $(SDK) -fwritable-strings -g -O0 -I. -I$(ROOT)\
 	-D_THREAD_SAFE -DPTHREAD -DCOCOA
 
 LDADD=-g
-LDFLAGS=$(ARCHFLAGS) $(SDK) -framework Cocoa -framework Metal \
-	-framework QuartzCore -framework CoreFoundation $(PTHREAD)
+LDFLAGS=$(ARCHFLAGS) $(SDK) -framework Cocoa $(PTHREAD)
+LDFLAGS=$(ARCHFLAGS) $(SDK) -framework Cocoa -framework Metal -framework QuartzCore $(PTHREAD)
 
 MAINO=
-
-LIBS=$(LIBS1) libmachdep.a
 
 all: default
 
 # build a fat archive so we can link no matter how the above flags are set
 libmachdep.a:
-	arch=386; \
-	(cd posix-$$arch && make "ASFLAGS=$(ASFLAGS32)" "ARCHFLAGS=$(ARCHFLAGS32)")
-	mv libmachdep.a libmachdep-386.a
 	arch=amd64; \
-	(cd posix-$$arch && make "ASFLAGS=$(ASFLAGS64)" "ARCHFLAGS=$(ARCHFLAGS64)")
-	mv libmachdep.a libmachdep-amd64.a
-	lipo -create -arch i386 libmachdep-386.a -arch x86_64 libmachdep-amd64.a -output libmachdep.a
-
+	(cd posix-$$arch && make "ARCHFLAGS=-arch x86_64 -m64")
+#	mv libmachdep.a libmachdep-amd64.a
+#	arch=arm64; \
+#	(cd posix-$$arch && make "ARCHFLAGS=-arch arm64 -m64")
+#	mv libmachdep.a libmachdep-arm64.a
+#	lipo -create -arch x86_64 libmachdep-amd64.a -arch arm64 libmachdep-arm64.a -output libmachdep.a

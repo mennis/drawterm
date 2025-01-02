@@ -192,5 +192,38 @@ extern	int	dec64(uchar*, int, char*, int);
 extern	int	enc64(char*, int, uchar*, int);
 extern	int	dec32(uchar*, int, char*, int);
 extern	int	enc32(char*, int, uchar*, int);
+extern	int	dec16(uchar*, int, char*, int);
 extern	int	enc16(char*, int, uchar*, int);
 void		hnputs(void *p, unsigned short v);
+
+extern int await(char*, int);
+extern	int	awaitfor(int, char*, int);
+extern	int	awaitnohang(char*, int);
+extern	Waitmsg*	p9wait(void);
+extern	Waitmsg*	p9waitfor(int);
+
+#ifndef NOPLAN9DEFINES
+#define wait		p9wait
+#endif
+
+/*
+ * random number
+ */
+extern	void	p9srand(long);
+extern	int	p9rand(void);
+
+extern	int	p9nrand(int);
+extern	long	p9lrand(void);
+extern	long	p9lnrand(long);
+extern	double	p9frand(void);
+extern	ulong	truerand(void);			/* uses /dev/random */
+extern	ulong	ntruerand(ulong);		/* uses /dev/random */
+
+#ifndef NOPLAN9DEFINES
+#define	srand	p9srand
+#define	rand	p9rand
+#define	nrand	p9nrand
+#define	lrand	p9lrand
+#define	lnrand	p9lnrand
+#define	frand	p9frand
+#endif

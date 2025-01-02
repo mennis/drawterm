@@ -47,7 +47,7 @@ CFLAGS=$(WARNINGS) $(ARCHFLAGS) $(SDK) -fwritable-strings -g -O0 -I. -I$(ROOT)\
 LDADD=-g
 LDFLAGS=$(ARCHFLAGS) $(SDK) -framework Cocoa $(PTHREAD)
 
-OSVERS=$(shell $(ROOT)/osxminver.sh)
+OSVERS=$(shell $(ROOT)/mkwsysrules.sh)
 
 ifeq ($(findstring $(OSVERS),13 14 15), $(OSVERS))
 	LDFLAGS=$(ARCHFLAGS) $(SDK) -framework Cocoa -framework Metal -framework QuartzCore $(PTHREAD)
@@ -58,7 +58,7 @@ MAINO=
 all: default
 
 # build a fat archive so we can link no matter how the above flags are set
-libmachdep.a:
+libmachdepfat.a:
 	arch=386; \
 	(cd posix-$$arch && make "ASFLAGS=$(ASFLAGS32)" "ARCHFLAGS=$(ARCHFLAGS32)")
 	mv libmachdep.a libmachdep-386.a
@@ -67,3 +67,6 @@ libmachdep.a:
 	mv libmachdep.a libmachdep-amd64.a
 	lipo -create -arch i386 libmachdep-386.a -arch x86_64 libmachdep-amd64.a -output libmachdep.a
 
+libmachdep.a:
+	arch=amd64; \
+	(cd posix-$$arch && make "ASFLAGS=$(ASFLAGS64)" "ARCHFLAGS=$(ARCHFLAGS64)")

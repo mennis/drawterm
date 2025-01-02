@@ -14,10 +14,10 @@ $(LIB): $(OFILES)
 	$(RANLIB) $(LIB)
 
 %.$O: %.c
-	$(CC) $(CFLAGS) $<
+	$(CC) $(CFLAGS) $*.c
 
 %.$O: %.s
-	$(AS) -o $@ $<
+	$(AS) -o $*.$O $*.s
 
 md5block.s: md5block.spp
 	gcc -E - < md5block.spp >md5block.s

@@ -2,7 +2,7 @@ ROOT=..
 include ../Make.config
 LIB=libsec.a
 
-OFILES=\
+ALLOFILES=\
 	aes.$O\
 	blowfish.$O\
 	decodepem.$O\
@@ -33,6 +33,7 @@ OFILES=\
 	hmac.$O\
 	md4.$O\
 	md5.$O\
+	md5block.$O\
 	md5pickle.$O\
 	nfastrand.$O\
 	prng.$O\
@@ -47,16 +48,18 @@ OFILES=\
 	rsaprivtopub.$O\
 	sha1.$O\
 	sha1block.$O\
-	sha1pickle.$O\
 	sha2_64.$O\
 	sha2_128.$O\
 	sha2block64.$O\
 	sha2block128.$O\
-	smallprimes.$O\
+	sha1pickle.$O\
 	smallprimetest.$O\
+	thumb.$O\
 	tlshand.$O\
 	x509.$O\
-#	thumb.$O\
+
+OFILES=$(ALLOFILES)
+HFILES=$(ROOT)/include/libsec.h
 
 default: $(LIB)
 $(LIB): $(OFILES)
@@ -64,4 +67,4 @@ $(LIB): $(OFILES)
 	$(RANLIB) $(LIB)
 
 %.$O: port/%.c
-	$(CC) $(CFLAGS) $<
+	$(CC) $(CFLAGS) port/$*.c

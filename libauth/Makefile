@@ -12,15 +12,11 @@ OFILES=\
 	auth_rpc.$O\
 	auth_userpasswd.$O\
 
-HFILES=\
-	$(ROOT)/include/auth.h\
-	$(ROOT)/include/authsrv.h\
-	authlocal.h
-
 default: $(LIB)
 $(LIB): $(OFILES)
 	$(AR) r $(LIB) $(OFILES)
 	$(RANLIB) $(LIB)
 
 %.$O: %.c
-	$(CC) $(CFLAGS) $<
+	$(CC) $(CFLAGS) $*.c
+

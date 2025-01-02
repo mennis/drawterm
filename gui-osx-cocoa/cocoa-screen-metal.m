@@ -39,6 +39,7 @@ AUTOFRAMEWORK(QuartzCore)
 */
 
 #define LOG	if(0)NSLog
+#define LOGG if(0)printf
 
 static uint keycvt(uint);
 static uint msec(void);
@@ -56,6 +57,8 @@ static Memimage* initimg(void);
 @end
 
 @interface DevDrawView : NSView<NSTextInputClient,NSWindowDelegate>
+@property (nonatomic, assign) CGPoint mpos;
+- (void)topwin;
 - (void)clearInput;
 - (void)getmouse:(NSEvent *)e;
 - (void)sendmouse:(NSUInteger)b;
@@ -80,6 +83,7 @@ static id<MTLCommandQueue> commandQueue;
 static id<MTLTexture> texture;
 
 static Memimage *img = NULL;
+static CGFloat scaleimg;
 
 static QLock snarfl;
 
@@ -170,13 +174,13 @@ Screeninfo	screeninfo;
 	[win setOpaque:YES];
 	[win setRestorable:NO];
 	[win setAcceptsMouseMovedEvents:YES];
-	[win setDelegate:myApp];
 
 	myContent = [DevDrawView new];
 	[win setContentView:myContent];
 	[myContent setWantsLayer:YES];
 	[myContent setLayerContentsRedrawPolicy:NSViewLayerContentsRedrawOnSetNeedsDisplay];
-	
+	[win setDelegate:myContent];
+
 	device = nil;
 	allDevices = MTLCopyAllDevices();
 	for(id mtlDevice in allDevices) {
@@ -410,19 +414,6 @@ struct Cursors {
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)theApplication {
 	return YES;
 }
-
-- (void)windowDidResize:(NSNotification *)notification
-{
-	if(![myContent inLiveResize] && img) {
-		resizeimg();
-	}
-}
-
-- (void)windowDidBecomeKey:(id)arg
-{
-        [myContent sendmouse:0];
-}
-
 @end
 
 @implementation DevDrawView
@@ -447,33 +438,41 @@ struct Cursors {
 	return self;
 }
 
-- (CALayer *)makeBackingLayer
+- (CALayer *)makeBackingLayer { return [DrawLayer layer]; }
+- (BOOL)wantsUpdateLayer { return YES; }
+- (BOOL)isOpaque { return YES; }
+- (BOOL)isFlipped { return YES; }
+- (BOOL)acceptsFirstResponder { return YES; }
+
+- (void)windowDidResize:(NSNotification *)notification
 {
-	LOG(@"makeBackingLayer");
-	return [DrawLayer layer];
+	if(![myContent inLiveResize] && img) {
+		resizeimg();
+	}
 }
 
-- (BOOL)wantsUpdateLayer
+- (void)windowDidBecomeKey:(id)arg
 {
-	return YES;
+	CGPoint q;
+	Point sp;
+
+	q = [myContent.window convertPointToBacking:
+		[myContent.window mouseLocationOutsideOfEventStream]];
+	sp = Pt(q.x/scaleimg, Dy(mouserect) - q.y/scaleimg);
+	LOGG("(%d, %d) <- mousetrack\n)", sp.x, sp.y);
+	mousetrack(sp.x, sp.y, 0, msec());
+	[myContent sendmouse:0];
 }
 
-- (BOOL)isOpaque
+- (void)windowDidResignKey:(id)arg
 {
-	return YES;
+	abortcompose();
 }
 
-- (BOOL)isFlipped
-{
-	return YES;
+- (void)topwin {
+    [self.window makeKeyAndOrderFront:nil];
+    [NSApp activateIgnoringOtherApps:YES];
 }
-
-- (BOOL)acceptsFirstResponder
-{
-	return YES;
-}
-
-// - (void)cursorUpdate:(NSEvent*)e{ [self updateCursor:e];}
 
 - (void)mouseMoved:(NSEvent*)e{ [self getmouse:e];}
 - (void)mouseDown:(NSEvent*)e{ [self getmouse:e];}
@@ -594,18 +593,24 @@ struct Cursors {
 
 - (void)sendmouse:(NSUInteger)b
 {
-	NSPoint p;
-	Point dp, xy;
+	NSPoint q;
+	Point sp;
 
-	p = [self.window convertPointToBacking:
+	q = [self.window convertPointToBacking:
 		[self.window mouseLocationOutsideOfEventStream]];
-	p.y = Dy(mouserect) - p.y;
-	xy = mousexy();
-	dp = Pt(p.x - xy.x, p.y - xy.y);
-	LOG(@"(%d, %d) <- sendmouse(%d)", dp.x, dp.y, (uint)b);
-	LOG(@"(%g, %g) <- sendmouse(%d)", p.x, p.y, (uint)b);
-	// mousetrack(dp.x, dp.y, b, msec());
-	mousetrack(p.x, p.y, b, msec());
+	sp = Pt(q.x/scaleimg, Dy(mouserect) - q.y/scaleimg);
+    if (ptinrect(sp, mouserect)) {
+		Point p, dp;
+		p = mousexy();
+		dp = Pt(self.mpos.x - p.x, self.mpos.y - p.y);
+		LOGG("(%g, %g) <- sendmouse(%d);", q.x, q.y, (uint)b);
+		LOGG(" (%d, %d) <- sendmouse(%d)\n", sp.x, sp.y, (uint)b);
+		LOGG("	mpos(%g, %g) ->  ", self.mpos.x, self.mpos.y);
+		LOGG("(%d, %d)\n", p.x, p.y);
+		LOGG("(%d, %d) <- mousetrack(%lu)\n", dp.x, dp.y, b);
+		mousetrack(dp.x, dp.y, b, msec());
+		self.mpos = NSMakePoint(round(sp.x), round(sp.y));
+    }
 
 	if(b && _lastInputRect.size.width && _lastInputRect.size.height)
 		[self resetLastInputRect];
@@ -994,7 +999,7 @@ keycvt(uint code)
 Memimage*
 _attachscreen(char *label, char *winsize)
 {
-	LOG(@"_attachscreen(%s, %s)", label, winsize);
+	LOGG("_attachscreen(%s, %s\n)", label, winsize);
 	[AppDelegate
 		performSelectorOnMainThread:@selector(makewin:)
 		withObject:[NSValue valueWithPointer:winsize]
@@ -1017,7 +1022,7 @@ attachscreen(Rectangle *r, ulong *chan, int *depth, int *width, int *softscreen,
 	if(X != nil)
 		*X = gscreen->X;
 
-	LOG(@"attachscreen %d %d %d %d",
+	LOGG("attachscreen %d %d %d %d\n",
 		gscreen->r.min.x, gscreen->r.min.y, Dx(gscreen->r), Dy(gscreen->r));
 	*r = gscreen->r;
 	*chan = gscreen->chan;
@@ -1029,7 +1034,8 @@ attachscreen(Rectangle *r, ulong *chan, int *depth, int *width, int *softscreen,
 }
 
 /*
- * Rio/blit assume 100dpi, we need to calibrate the views to behave that way.
+ * Rio/blit calibrate to 96ppi as the default when matching font point sizes
+ * to the screen image.
  */
 
 static Memimage*
@@ -1041,20 +1047,20 @@ initimg(void)
 	CGSize displayPhysicalSize = CGDisplayScreenSize(
             [[description objectForKey:@"NSScreenNumber"] unsignedIntValue]);
 	CGFloat dpi = ((displayPixelSize.width / displayPhysicalSize.width) * 25.4f); 
-
-	CGFloat scale;
+    CGFloat scale;
+    
 	NSSize size, scaledSize;
 	MTLTextureDescriptor *textureDesc;
 
 	displaydpi = [[win.deviceDescription valueForKey:NSDeviceResolution] sizeValue].width;
 
-	scale = displaydpi / 96.0f;
+    scaleimg = displaydpi / 96.0f;
 	size = [myContent convertSizeToBacking:[myContent bounds].size];
-	scaledSize = NSMakeSize(size.width / scale, size.height / scale);
+	scaledSize = NSMakeSize(size.width / scaleimg, size.height / scaleimg);
+    printf("mouserect: size(%.0f, %.0f) -> scaled(%.1f, %.1f)\n", size.width, size.height, scaledSize.width, scaledSize.height);
 	mouserect = Rect(0, 0, scaledSize.width, scaledSize.height);
 
-	LOG(@"initimg %.0f %.0f", size.width, size.height);
-
+	printf("allocmemimage(%d,%d)\n", Dx(mouserect), Dy(mouserect));
 	img = allocmemimage(mouserect, XRGB32);
 	if(img == nil)
 		panic("allocmemimage: %r");
@@ -1071,6 +1077,8 @@ initimg(void)
 	textureDesc.cpuCacheMode = MTLCPUCacheModeWriteCombined;
 	texture = [device newTextureWithDescriptor:textureDesc];
 
+    scale = [win backingScaleFactor];
+    LOG(@"backingScaleFactor: %.0f, %.0f", scale, scaleimg);
 	[layer setDrawableSize:scaledSize];
 	[layer setContentsScale:scale];
 
@@ -1123,25 +1131,18 @@ setmouse(Point p)
 	@autoreleasepool{
 		NSPoint q;
 
-		LOG(@"setmouse(%d,%d)", p.x, p.y);
+		LOGG("setmouse(%d,%d)\n", p.x, p.y);
 		q = [win convertPointFromBacking:NSMakePoint(p.x, p.y)];
-		LOG(@"(%g, %g) <- fromBacking", q.x, q.y);
-		q = [myContent convertPoint:q toView:nil];
-		LOG(@"(%g, %g) <- toWindow", q.x, q.y);
-		// q = [win convertPointToScreen:q];
-		q = [win convertPointToBacking:q];
-		LOG(@"(%g, %g) <- toBacking", q.x, q.y);
-		// Quartz has the origin of the "global display
-		// coordinate space" at the top left of the primary
-		// screen with y increasing downward, while Cocoa has
-		// the origin at the bottom left of the primary screen
-		// with y increasing upward.  We flip the coordinate
-		// with a negative sign and shift upward by the height
-		// of the primary screen.
+		LOGG("(%g, %g) <- fromBacking\n", q.x, q.y);
+		q = [myContent convertPoint:NSMakePoint(p.x, p.y) toView:nil];
+		LOGG("(%g, %g) <- toWindow\n", q.x, q.y);
+		q = [win convertPointToScreen:q];
+		LOGG("(%g, %g) <- toScreen\n", q.x, q.y);
 		q.y = [NSScreen mainScreen].frame.size.height - q.y;
-		LOG(@"(%g, %g) <- setmouse", q.x, q.y);
+//		myContent.mpos = q;
+        printf("(%g, %g) <- warpMouse\n", q.x, q.y);
 		CGWarpMouseCursorPosition(NSPointToCGPoint(q));
-		CGAssociateMouseAndMouseCursorPosition(true);
+ 		CGAssociateMouseAndMouseCursorPosition(true);
 	}
 }
 
@@ -1315,12 +1316,13 @@ mouseset(Point xy)
 	NSPoint p, q;
 	p = [win mouseLocationOutsideOfEventStream];
 	q = [win.contentView convertPoint:p fromView:nil];
-	LOG(@"mouseset (%f,%f)->(%d,%d)", q.x, q.y, xy.x, xy.y);
 
-	if(q.x >= 0.0 && q.y >= 0.0) {
-		if(![win.contentView isHidden]) // && !eqpt(xy, Pt(in.mpos.x, in.mpos.y)))
-			setmouse(xy);		
-	}
+	LOGG("mouseset (%d,%d)", xy.x, xy.y);
+	if(![win.contentView isHidden] && !eqpt(xy, Pt(myContent.mpos.x, myContent.mpos.y))) {
+		LOGG("->(%f,%f)\n", q.x, q.y);
+		setmouse(Pt(round(q.x), (q.y)));
+	} else
+		LOGG("\n");
 }
 
 char*
@@ -1354,6 +1356,7 @@ int
 cursoron(int dolock)
 {
 	Point p;
+    LOG(@"cursoron(%d)", dolock);
 	if(dolock)
 		lock(&cursor.lk);
 	p = mousexy();
@@ -1366,6 +1369,7 @@ cursoron(int dolock)
 void
 cursoroff(int d)
 {
+    LOG(@"cursoroff(%d)", d);
 }
 
 void

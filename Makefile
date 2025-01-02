@@ -13,15 +13,7 @@ OFILES=\
 	secstore.$O\
 	latin1.$O\
 	$(OS)-factotum.$O\
-	winsize.$O\
 	$(XOFILES)\
-
-HFILES=\
-	args.h\
-	drawterm.h\
-	latin1.h\
-	resource.h\
-	screen.h\
 
 LIBS1=\
 	kern/libkern.a\
@@ -39,7 +31,7 @@ LIBS1=\
 	libip/libip.a\
 
 # stupid gcc
-#LIBS=$(LIBS1) $(LIBS1) $(LIBS1) libmachdep.a
+# LIBS=$(LIBS1) $(LIBS1) $(LIBS1) libmachdep.a
 LIBS=$(LIBS1) libmachdep.a
 
 default: $(TARG)
@@ -47,10 +39,10 @@ $(TARG): $(OFILES) $(LIBS1) libmachdep.a
 	$(CC) $(LDFLAGS) -o $(TARG) $(OFILES) $(LIBS) $(LDADD)
 
 %.$O: %.c
-	$(CC) $(CFLAGS) $<
+	$(CC) $(CFLAGS) $*.c
 
 clean:
-	rm -f *.o */*.o $(LIBS) *.a $(TARG)
+	rm -f *.o */*.o */*.a *.a $(TARG)
 
 install: $(TARG)
 	install $(TARG) $(DESTROOT)/bin

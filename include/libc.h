@@ -6,28 +6,6 @@
 #include "user.h"
 
 /*
- * random number
- */
-extern	void	p9srand(long);
-extern	int	p9rand(void);
-
-extern	int	p9nrand(int);
-extern	long	p9lrand(void);
-extern	long	p9lnrand(long);
-extern	double	p9frand(void);
-extern	ulong	truerand(void);			/* uses /dev/random */
-extern	ulong	ntruerand(ulong);		/* uses /dev/random */
-
-#ifndef NOPLAN9DEFINES
-#define	srand	p9srand
-#define	rand	p9rand
-#define	nrand	p9nrand
-#define	lrand	p9lrand
-#define	lnrand	p9lnrand
-#define	frand	p9frand
-#endif
-
-/*
  * Time-of-day
  */
 
@@ -123,7 +101,3 @@ extern	void	rerrstr(char*, uint);
 extern	void	werrstr(char*, ...);
 
 extern	long	p9time(long*);
-
-#ifndef NOPLAN9DEFINES
-#define time		p9time
-#endif

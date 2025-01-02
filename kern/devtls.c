@@ -1,14 +1,15 @@
 /*
- *  devtls - record layer for transport layer security 1.0 and secure sockets layer 3.0
+ *  devtls - record layer for transport layer security 1.[0-2] and
+ *	secure sockets layer 3.0
  */
 #include	"u.h"
 #include	"lib.h"
-#include 	"mem.h"
+#include	"mem.h"
 #include	"dat.h"
 #include	"fns.h"
 #include	"error.h"
 
-#include	"libsec.h"
+#include	<libsec.h>
 
 typedef struct OneWay	OneWay;
 typedef struct Secret		Secret;
@@ -16,18 +17,25 @@ typedef struct TlsRec	TlsRec;
 typedef struct TlsErrs	TlsErrs;
 
 enum {
-	Statlen=	1024,		/* max. length of status or stats message */
+	MaxTlsDevs	= 1024,		/* max. open tls connections */
+
+	Statlen		= 1024,		/* max. length of status or stats message */
 	/* buffer limits */
-	MaxRecLen		= 1<<14,	/* max payload length of a record layer message */
+	MaxRecLen	= 1<<14, /* max payload length of a record layer message */
 	MaxCipherRecLen	= MaxRecLen + 2048,
-	RecHdrLen		= 5,
-	MaxMacLen		= SHA1dlen,
+	RecHdrLen	= 5,
+	MaxMacLen	= SHA2_512dlen,
 
 	/* protocol versions we can accept */
-	TLSVersion		= 0x0301,
-	SSL3Version		= 0x0300,
-	ProtocolVersion	= 0x0301,	/* maximum version we speak */
+	SSL3Version	= 0x0300,
+	TLS10Version	= 0x0301,
+	TLS11Version	= 0x0302,
+	TLS12Version	= 0x0303,
 	MinProtoVersion	= 0x0300,	/* limits on version we accept */
+	/*
+	 * should MaxProtoVersion be TLS12Version, or will we interoperate with
+	 * all tls 1 implementations?
+	 */
 	MaxProtoVersion	= 0x03ff,
 
 	/* connection states */
@@ -73,6 +81,7 @@ enum {
 	EInternalError 			= 80,
 	EUserCanceled 			= 90,
 	ENoRenegotiation 		= 100,
+	EUnrecognizedName		= 112,
 
 	EMAX = 256
 };
@@ -102,88 +111,85 @@ struct OneWay
 
 struct TlsRec
 {
-	Chan	*c;				/* io channel */
-	int		ref;				/* serialized by tdlock for atomic destroy */
-	int		version;			/* version of the protocol we are speaking */
-	char		verset;			/* version has been set */
-	char		opened;			/* opened command every issued? */
-	char		err[ERRMAX];		/* error message to return to handshake requests */
-	vlong	handin;			/* bytes communicated by the record layer */
+	Chan	*c;		/* io channel */
+	int	ref;		/* serialized by tdlock for atomic destroy */
+	int	version;	/* version of the protocol we are speaking */
+	char	verset;		/* version has been set */
+	char	opened;		/* opened command every issued? */
+	char	err[ERRMAX];	/* error message to return to handshake requests */
+	vlong	handin;		/* bytes communicated by the record layer */
 	vlong	handout;
 	vlong	datain;
 	vlong	dataout;
 
-	Lock		statelk;
-	int		state;
-	int		debug;
+	Lock	statelk;
+	int	state;
+	int	debug;
 
 	/* record layer mac functions for different protocol versions */
-	void		(*packMac)(Secret*, uchar*, uchar*, uchar*, uchar*, int, uchar*);
+	void	(*packMac)(Secret*, uchar*, uchar*, uchar*, uchar*, int, uchar*);
 
 	/* input side -- protected by in.io */
-	OneWay		in;
-	Block		*processed;	/* next bunch of application data */
-	Block		*unprocessed;	/* data read from c but not parsed into records */
+	OneWay	in;
+	Block	*processed;	/* next bunch of application data */
+	Block	*unprocessed;	/* data read from c but not parsed into records */
 
 	/* handshake queue */
-	Lock		hqlock;			/* protects hqref, alloc & free of handq, hprocessed */
-	int		hqref;
-	Queue		*handq;		/* queue of handshake messages */
-	Block		*hprocessed;	/* remainder of last block read from handq */
-	QLock		hqread;		/* protects reads for hprocessed, handq */
+	Lock	hqlock;	/* protects hqref, alloc & free of handq, hprocessed */
+	int	hqref;
+	Queue	*handq;		/* queue of handshake messages */
+	Block	*hprocessed;	/* remainder of last block read from handq */
+	QLock	hqread;		/* protects reads for hprocessed, handq */
 
 	/* output side */
-	OneWay		out;
+	OneWay	out;
 
 	/* protections */
-	char		*user;
-	int		perm;
+	char	*user;
+	int	perm;
 };
 
+/* tls error code is always err, except for ENoCertificate (see sendAlert). */
 struct TlsErrs{
 	int	err;
-	int	sslerr;
-	int	tlserr;
+	int	sslerr;			/* err maps to this code in sslv3 */
 	int	fatal;
 	char	*msg;
 };
 
 static TlsErrs tlserrs[] = {
-	{ECloseNotify,			ECloseNotify,			ECloseNotify,			0, 	"close notify"},
-	{EUnexpectedMessage,	EUnexpectedMessage,	EUnexpectedMessage, 	1, "unexpected message"},
-	{EBadRecordMac,		EBadRecordMac,		EBadRecordMac, 		1, "bad record mac"},
-	{EDecryptionFailed,		EIllegalParameter,		EDecryptionFailed,		1, "decryption failed"},
-	{ERecordOverflow,		EIllegalParameter,		ERecordOverflow,		1, "record too long"},
-	{EDecompressionFailure,	EDecompressionFailure,	EDecompressionFailure,	1, "decompression failed"},
-	{EHandshakeFailure,		EHandshakeFailure,		EHandshakeFailure,		1, "could not negotiate acceptable security parameters"},
-	{ENoCertificate,		ENoCertificate,			ECertificateUnknown,	1, "no appropriate certificate available"},
-	{EBadCertificate,		EBadCertificate,		EBadCertificate,		1, "corrupted or invalid certificate"},
-	{EUnsupportedCertificate,	EUnsupportedCertificate,	EUnsupportedCertificate,	1, "unsupported certificate type"},
-	{ECertificateRevoked,	ECertificateRevoked,		ECertificateRevoked,		1, "revoked certificate"},
-	{ECertificateExpired,		ECertificateExpired,		ECertificateExpired,		1, "expired certificate"},
-	{ECertificateUnknown,	ECertificateUnknown,	ECertificateUnknown,	1, "unacceptable certificate"},
-	{EIllegalParameter,		EIllegalParameter,		EIllegalParameter,		1, "illegal parameter"},
-	{EUnknownCa,			EHandshakeFailure,		EUnknownCa,			1, "unknown certificate authority"},
-	{EAccessDenied,		EHandshakeFailure,		EAccessDenied,		1, "access denied"},
-	{EDecodeError,			EIllegalParameter,		EDecodeError,			1, "error decoding message"},
-	{EDecryptError,			EIllegalParameter,		EDecryptError,			1, "error decrypting message"},
-	{EExportRestriction,		EHandshakeFailure,		EExportRestriction,		1, "export restriction violated"},
-	{EProtocolVersion,		EIllegalParameter,		EProtocolVersion,		1, "protocol version not supported"},
-	{EInsufficientSecurity,	EHandshakeFailure,		EInsufficientSecurity,	1, "stronger security routines required"},
-	{EInternalError,			EHandshakeFailure,		EInternalError,			1, "internal error"},
-	{EUserCanceled,		ECloseNotify,			EUserCanceled,			0, "handshake canceled by user"},
-	{ENoRenegotiation,		EUnexpectedMessage,	ENoRenegotiation,		0, "no renegotiation"},
-};
-
-enum
-{
-	/* max. open tls connections */
-	MaxTlsDevs	= 1024
+	{ECloseNotify, ECloseNotify, 0, "close notify"},
+	{EUnexpectedMessage, EUnexpectedMessage, 1, "unexpected message"},
+	{EBadRecordMac, EBadRecordMac, 1, "bad record mac"},
+	{EDecryptionFailed, EIllegalParameter, 1, "decryption failed"},
+	{ERecordOverflow, EIllegalParameter, 1, "record too long"},
+	{EDecompressionFailure, EDecompressionFailure, 1, "decompression failed"},
+	{EHandshakeFailure, EHandshakeFailure, 1,
+		"could not negotiate acceptable security parameters"},
+	{ENoCertificate, ENoCertificate, 1, "no appropriate certificate available"},
+	{EBadCertificate, EBadCertificate, 1, "corrupted or invalid certificate"},
+	{EUnsupportedCertificate, EUnsupportedCertificate, 1,
+		"unsupported certificate type"},
+	{ECertificateRevoked, ECertificateRevoked, 1, "revoked certificate"},
+	{ECertificateExpired, ECertificateExpired, 1, "expired certificate"},
+	{ECertificateUnknown, ECertificateUnknown, 1, "unacceptable certificate"},
+	{EIllegalParameter, EIllegalParameter, 1, "illegal parameter"},
+	{EUnknownCa, EHandshakeFailure, 1, "unknown certificate authority"},
+	{EAccessDenied, EHandshakeFailure, 1, "access denied"},
+	{EDecodeError, EIllegalParameter, 1, "error decoding message"},
+	{EDecryptError, EIllegalParameter, 1, "error decrypting message"},
+	{EExportRestriction, EHandshakeFailure, 1, "export restriction violated"},
+	{EProtocolVersion, EIllegalParameter, 1, "protocol version not supported"},
+	{EInsufficientSecurity, EHandshakeFailure, 1,
+		"stronger security routines required"},
+	{EInternalError, EHandshakeFailure, 1, "internal error"},
+	{EUserCanceled, ECloseNotify, 0, "handshake canceled by user"},
+	{ENoRenegotiation, EUnexpectedMessage, 0, "no renegotiation"},
 };
 
 static	Lock	tdlock;
 static	int	tdhiwat;
-static	int	maxtlsdevs = 128;
+static	int	maxtlsdevs = 128;  /* increases dynamically up to MaxTlsDevs */
 static	TlsRec	**tlsdevs;
 static	char	**trnames;
 static	char	*encalgs;
@@ -218,6 +224,9 @@ static TlsRec	*newtls(Chan *c);
 static TlsRec	*mktlsrec(void);
 static DigestState*sslmac_md5(uchar *p, ulong len, uchar *key, ulong klen, uchar *digest, DigestState *s);
 static DigestState*sslmac_sha1(uchar *p, ulong len, uchar *key, ulong klen, uchar *digest, DigestState *s);
+static DigestState*sslmac_sha2_256(uchar *p, ulong len, uchar *key, ulong klen, uchar *digest, DigestState *s);
+static DigestState*sslmac_sha2_384(uchar *p, ulong len, uchar *key, ulong klen, uchar *digest, DigestState *s);
+static DigestState*sslmac_sha2_512(uchar *p, ulong len, uchar *key, ulong klen, uchar *digest, DigestState *s);
 static DigestState*nomac(uchar *p, ulong len, uchar *key, ulong klen, uchar *digest, DigestState *s);
 static void	sslPackMac(Secret *sec, uchar *mackey, uchar *seq, uchar *header, uchar *body, int len, uchar *mac);
 static void	tlsPackMac(Secret *sec, uchar *mackey, uchar *seq, uchar *header, uchar *body, int len, uchar *mac);
@@ -225,7 +234,7 @@ static void	put64(uchar *p, vlong x);
 static void	put32(uchar *p, u32int);
 static void	put24(uchar *p, int);
 static void	put16(uchar *p, int);
-/* static u32int	get32(uchar *p); */
+static u32int	get32(uchar *p);
 static int	get16(uchar *p);
 static void	tlsSetState(TlsRec *tr, int new, int old);
 static void	rcvAlert(TlsRec *tr, int err);
@@ -243,6 +252,20 @@ static void	freeSec(Secret *sec);
 static char	*tlsstate(int s);
 static void	pdump(int, void*, char*);
 
+#pragma	varargck	argpos	rcvError	3
+
+/*
+static char *tlsnames[] = {
+[Qclonus]		"clone",
+[Qencalgs]	"encalgs",
+[Qhashalgs]	"hashalgs",
+[Qdata]		"data",
+[Qctl]		"ctl",
+[Qhand]		"hand",
+[Qstatus]		"status",
+[Qstats]		"stats",
+};
+*/
 static char *tlsnames[] = {
 	/* unused */ 0,
 	/* topdir */ 0,
@@ -261,7 +284,7 @@ static char *tlsnames[] = {
 static int convdir[] = { Qctl, Qdata, Qhand, Qstatus, Qstats };
 
 static int
-tlsgen(Chan *c, char*unused1, Dirtab *unused2, int unused3, int s, Dir *dp)
+tlsgen(Chan *c, char*, Dirtab *, int, int s, Dir *dp)
 {
 	Qid q;
 	TlsRec *tr;
@@ -326,7 +349,7 @@ tlsgen(Chan *c, char*unused1, Dirtab *unused2, int unused3, int s, Dir *dp)
 			nm = eve;
 		if((name = trnames[s]) == nil){
 			name = trnames[s] = smalloc(16);
-			sprint(name, "%d", s);
+			snprint(name, 16, "%d", s);
 		}
 		devdir(c, q, name, 0, nm, 0555, dp);
 		unlock(&tdlock);
@@ -380,7 +403,6 @@ tlsgen(Chan *c, char*unused1, Dirtab *unused2, int unused3, int s, Dir *dp)
 		unlock(&tdlock);
 		return 1;
 	}
-	return -1;
 }
 
 static Chan*
@@ -470,7 +492,7 @@ tlsopen(Chan *c, int omode)
 			lock(&tr->hqlock);
 			if(tr->handq != nil)
 				error(Einuse);
-			tr->handq = qopen(2 * MaxCipherRecLen, 0, 0, nil);
+			tr->handq = qopen(2 * MaxCipherRecLen, 0, nil, nil);
 			if(tr->handq == nil)
 				error("cannot allocate handshake queue");
 			tr->hqref = 1;
@@ -490,7 +512,8 @@ tlsopen(Chan *c, int omode)
 	c->mode = openmode(omode);
 	c->flag |= COPEN;
 	c->offset = 0;
-	c->iounit = qiomaxatomic;
+	c->iounit = MaxRecLen;
+	assert(MaxRecLen <= qiomaxatomic);
 	return c;
 }
 
@@ -521,7 +544,7 @@ tlswstat(Chan *c, uchar *dp, int n)
 		error(Eshortstat);
 	if(!emptystr(d->uid))
 		kstrdup(&tr->user, d->uid);
-	if(d->mode != (ulong)-1)
+	if(d->mode != ~0UL)
 		tr->perm = d->mode;
 
 	free(d);
@@ -735,7 +758,7 @@ tlsrecread(TlsRec *tr)
 {
 	OneWay *volatile in;
 	Block *volatile b;
-	uchar *p, seq[8], header[RecHdrLen], hmac[MD5dlen];
+	uchar *p, seq[8], header[RecHdrLen], hmac[MaxMacLen];
 	int volatile nconsumed;
 	int len, type, ver, unpad_len;
 
@@ -754,22 +777,27 @@ if(tr->debug)pprint("consumed %d header\n", RecHdrLen);
 	nconsumed = RecHdrLen;
 
 	if((tr->handin == 0) && (header[0] & 0x80)){
-		/* Cope with an SSL3 ClientHello expressed in SSL2 record format.
-			This is sent by some clients that we must interoperate
-			with, such as Java's JSSE and Microsoft's Internet Explorer. */
+		/*
+		 * Cope with an SSL3 ClientHello expressed in SSL2 record format.
+		 * This is sent by some clients that we must interoperate
+		 * with, such as Java's JSSE and Microsoft's Internet Explorer.
+		 */
 		len = (get16(header) & ~0x8000) - 3;
 		type = header[2];
 		ver = get16(header + 3);
 		if(type != SSL2ClientHello || len < 22)
 			rcvError(tr, EProtocolVersion, "invalid initial SSL2-like message");
-	}else{  /* normal SSL3 record format */
+	}else{  			/* normal SSL3 record format */
 		type = header[0];
 		ver = get16(header+1);
 		len = get16(header+3);
 	}
-	if(ver != tr->version && (tr->verset || ver < MinProtoVersion || ver > MaxProtoVersion))
-		rcvError(tr, EProtocolVersion, "devtls expected ver=%x%s, saw (len=%d) type=%x ver=%x '%.12s'",
-			tr->version, tr->verset?"/set":"", len, type, ver, (char*)header);
+	if(ver != tr->version &&
+	    (tr->verset || ver < MinProtoVersion || ver > MaxProtoVersion))
+		rcvError(tr, EProtocolVersion,
+			"devtls expected ver=%x%s, saw (len=%d) type=%x ver=%x '%.12s'",
+			tr->version, tr->verset?"/set":"", len, type, ver,
+			(char*)header);
 	if(len > MaxCipherRecLen || len < 0)
 		rcvError(tr, ERecordOverflow, "record message too long %d", len);
 	ensure(tr, &tr->unprocessed, len);
@@ -800,9 +828,22 @@ if(tr->debug) pprint("consumed unprocessed %d\n", len);
 	qlock(&in->seclock);
 	p = b->rp;
 	if(in->sec != nil) {
-		/* to avoid Canvel-Hiltgen-Vaudenay-Vuagnoux attack, all errors here
-		        should look alike, including timing of the response. */
+		/*
+		 * to avoid Canvel-Hiltgen-Vaudenay-Vuagnoux attack, all errors
+		 * here should look alike, including timing of the response.
+		 */
 		unpad_len = (*in->sec->dec)(in->sec, p, len);
+
+		/* explicit iv */
+		if(tr->version >= TLS11Version){
+			len -= in->sec->block;
+			if(len < 0)
+				rcvError(tr, EDecodeError, "runt record message");
+
+			unpad_len -= in->sec->block;
+			p += in->sec->block;
+		}
+
 		if(unpad_len >= in->sec->maclen)
 			len = unpad_len - in->sec->maclen;
 if(tr->debug) pprint("decrypted %d\n", unpad_len);
@@ -817,7 +858,8 @@ if(tr->debug) pdump(unpad_len, p, "decrypted:");
 			rcvError(tr, EBadRecordMac, "short record mac");
 		if(memcmp(hmac, p+len, in->sec->maclen) != 0)
 			rcvError(tr, EBadRecordMac, "record mac mismatch");
-		b->wp = b->rp + len;
+		b->rp = p;
+		b->wp = p + len;
 	}
 	qunlock(&in->seclock);
 	poperror();
@@ -826,7 +868,7 @@ if(tr->debug) pdump(unpad_len, p, "decrypted:");
 
 	switch(type) {
 	default:
-		rcvError(tr, EIllegalParameter, "invalid record message 0x%x", type);
+		rcvError(tr, EIllegalParameter, "invalid record message %#x", type);
 		break;
 	case RChangeCipherSpec:
 		if(len != 1 || p[0] != 1)
@@ -853,18 +895,24 @@ if(tr->debug) pdump(unpad_len, p, "decrypted:");
 		/*
 		 * propate non-fatal alerts to handshaker
 		 */
-		if(p[1] == ECloseNotify) {
+		switch(p[1]){
+		case ECloseNotify:
 			tlsclosed(tr, SRClose);
 			if(tr->opened)
 				error("tls hungup");
 			error("close notify");
-		}
-		if(p[1] == ENoRenegotiation)
+		case ENoRenegotiation:
 			alertHand(tr, "no renegotiation");
-		else if(p[1] == EUserCanceled)
+			break;
+		case EUserCanceled:
 			alertHand(tr, "handshake canceled by user");
-		else
+			break;
+		case EUnrecognizedName:
+			/* happens in response to SNI, can be ignored. */
+			break;
+		default:
 			rcvError(tr, EIllegalParameter, "invalid alert code");
+		}
 		break;
 	case RHandshake:
 		/*
@@ -905,9 +953,11 @@ if(tr->debug) pdump(unpad_len, p, "decrypted:");
 				dechandq(tr);
 				nexterror();
 			}
-			/* Pass the SSL2 format data, so that the handshake code can compute
-				the correct checksums.  HSSL2ClientHello = HandshakeType 9 is
-				unused in RFC2246. */
+			/*
+			 * Pass the SSL2 format data, so that the handshake
+			 * code can compute the correct checksums.
+			 * HSSL2ClientHello = HandshakeType 9 is unused in RFC2246.
+			 */
 			b = padblock(b, 8);
 			b->rp[0] = RHandshake;
 			b->rp[1] = HSSL2ClientHello;
@@ -928,7 +978,8 @@ if(tr->debug) pdump(unpad_len, p, "decrypted:");
 		break;
 	case RApplication:
 		if(!tr->opened)
-			rcvError(tr, EUnexpectedMessage, "application message received before handshake completed");
+			rcvError(tr, EUnexpectedMessage,
+				"application message received before handshake completed");
 		if(BLEN(b) > 0){
 			tr->processed = b;
 			b = nil;
@@ -1077,7 +1128,7 @@ tlsbread(Chan *c, long n, ulong offset)
 
 		/* return at most what was asked for */
 		b = qgrab(&tr->processed, n);
-if(tr->debug) pprint("consumed processed %d\n", BLEN(b));
+if(tr->debug) pprint("consumed processed %ld\n", BLEN(b));
 if(tr->debug) pdump(BLEN(b), b->rp, "consumed:");
 		qunlock(&tr->in.io);
 		poperror();
@@ -1145,15 +1196,19 @@ tlsread(Chan *c, void *a, long n, vlong off)
 		s = buf;
 		e = buf + Statlen;
 		s = seprint(s, e, "State: %s\n", tlsstate(tr->state));
-		s = seprint(s, e, "Version: 0x%x\n", tr->version);
+		s = seprint(s, e, "Version: %#x\n", tr->version);
 		if(tr->in.sec != nil)
-			s = seprint(s, e, "EncIn: %s\nHashIn: %s\n", tr->in.sec->encalg, tr->in.sec->hashalg);
+			s = seprint(s, e, "EncIn: %s\nHashIn: %s\n",
+				tr->in.sec->encalg, tr->in.sec->hashalg);
 		if(tr->in.new != nil)
-			s = seprint(s, e, "NewEncIn: %s\nNewHashIn: %s\n", tr->in.new->encalg, tr->in.new->hashalg);
+			s = seprint(s, e, "NewEncIn: %s\nNewHashIn: %s\n",
+				tr->in.new->encalg, tr->in.new->hashalg);
 		if(tr->out.sec != nil)
-			s = seprint(s, e, "EncOut: %s\nHashOut: %s\n", tr->out.sec->encalg, tr->out.sec->hashalg);
+			s = seprint(s, e, "EncOut: %s\nHashOut: %s\n",
+				tr->out.sec->encalg, tr->out.sec->hashalg);
 		if(tr->out.new != nil)
-			seprint(s, e, "NewEncOut: %s\nNewHashOut: %s\n", tr->out.new->encalg, tr->out.new->hashalg);
+			seprint(s, e, "NewEncOut: %s\nNewHashOut: %s\n",
+				tr->out.new->encalg, tr->out.new->hashalg);
 		qunlock(&tr->in.seclock);
 		qunlock(&tr->out.seclock);
 		n = readstr(offset, a, n, buf);
@@ -1205,6 +1260,13 @@ tlsread(Chan *c, void *a, long n, vlong off)
 	return n;
 }
 
+static void
+randfill(uchar *buf, int len)
+{
+	while(len-- > 0)
+		*buf++ = fastrand();	// nrand(256);
+}
+
 /*
  *  write a block in tls records
  */
@@ -1215,7 +1277,7 @@ tlsrecwrite(TlsRec *tr, int type, Block *b)
 	Block *nb;
 	uchar *p, seq[8];
 	OneWay *volatile out;
-	int n, maclen, pad, ok;
+	int n, ivlen, maclen, pad, ok;
 
 	out = &tr->out;
 	bb = b;
@@ -1226,7 +1288,7 @@ tlsrecwrite(TlsRec *tr, int type, Block *b)
 		nexterror();
 	}
 	qlock(&out->io);
-if(tr->debug)pprint("send %d\n", BLEN(b));
+if(tr->debug)pprint("send %ld\n", BLEN(b));
 if(tr->debug)pdump(BLEN(b), b->rp, "sent:");
 
 
@@ -1246,23 +1308,25 @@ if(tr->debug)pdump(BLEN(b), b->rp, "sent:");
 			nexterror();
 		}
 		qlock(&out->seclock);
-		maclen = 0;
-		pad = 0;
+		maclen = pad = ivlen = 0;
 		if(out->sec != nil){
 			maclen = out->sec->maclen;
 			pad = maclen + out->sec->block;
+			if(tr->version >= TLS11Version)
+				ivlen = out->sec->block;
 		}
 		n = BLEN(bb);
 		if(n > MaxRecLen){
 			n = MaxRecLen;
-			nb = allocb(n + pad + RecHdrLen);
-			memmove(nb->wp + RecHdrLen, bb->rp, n);
+			nb = allocb(RecHdrLen + ivlen + n + pad);
+			memmove(nb->wp + RecHdrLen + ivlen, bb->rp, n);
 			bb->rp += n;
 		}else{
 			/*
-			 * carefully reuse bb so it will get freed if we're out of memory
+			 * carefully reuse bb so it will get freed
+			 * if we're out of memory
 			 */
-			bb = padblock(bb, RecHdrLen);
+			bb = padblock(bb, RecHdrLen + ivlen);
 			if(pad)
 				nb = padblock(bb, -pad);
 			else
@@ -1278,8 +1342,16 @@ if(tr->debug)pdump(BLEN(b), b->rp, "sent:");
 		if(out->sec != nil){
 			put64(seq, out->seq);
 			out->seq++;
-			(*tr->packMac)(out->sec, out->sec->mackey, seq, p, p + RecHdrLen, n, p + RecHdrLen + n);
+			(*tr->packMac)(out->sec, out->sec->mackey, seq, p,
+				p + RecHdrLen + ivlen, n,
+				p + RecHdrLen + ivlen + n);
 			n += maclen;
+
+			/* explicit iv */
+			if(ivlen > 0){
+				randfill(p + RecHdrLen, ivlen);
+				n += ivlen;
+			}
 
 			/* encrypt */
 			n = (*out->sec->enc)(out->sec, p + RecHdrLen, n);
@@ -1326,7 +1398,7 @@ tlsbwrite(Chan *c, Block *b, ulong offset)
 
 	tr = tlsdevs[CONV(c->qid)];
 	if(tr == nil)
-		panic("tlsbread");
+		panic("tlsbwrite");
 
 	ty = TYPE(c->qid);
 	switch(ty) {
@@ -1366,7 +1438,7 @@ initmd5key(Hashalg *ha, int version, Secret *s, uchar *p)
 }
 
 static void
-initclearmac(Hashalg *unused1, int unused2, Secret *s, uchar *unused3)
+initclearmac(Hashalg *, int, Secret *s, uchar *)
 {
 	s->maclen = 0;
 	s->mac = nomac;
@@ -1383,11 +1455,48 @@ initsha1key(Hashalg *ha, int version, Secret *s, uchar *p)
 	memmove(s->mackey, p, ha->maclen);
 }
 
+static void
+initsha2_256key(Hashalg *ha, int version, Secret *s, uchar *p)
+{
+	s->maclen = ha->maclen;
+	if(version == SSL3Version)
+		s->mac = sslmac_sha2_256;
+	else
+		s->mac = hmac_sha2_256;
+	memmove(s->mackey, p, ha->maclen);
+}
+
+static void
+initsha2_384key(Hashalg *ha, int version, Secret *s, uchar *p)
+{
+	s->maclen = ha->maclen;
+	if(version == SSL3Version)
+		s->mac = sslmac_sha2_384;
+	else
+		s->mac = hmac_sha2_384;
+	memmove(s->mackey, p, ha->maclen);
+}
+
+static void
+initsha2_512key(Hashalg *ha, int version, Secret *s, uchar *p)
+{
+	s->maclen = ha->maclen;
+	if(version == SSL3Version)
+		s->mac = sslmac_sha2_512;
+	else
+		s->mac = hmac_sha2_512;
+	memmove(s->mackey, p, ha->maclen);
+}
+
 static Hashalg hashtab[] =
 {
 	{ "clear", 0, initclearmac, },
 	{ "md5", MD5dlen, initmd5key, },
 	{ "sha1", SHA1dlen, initsha1key, },
+	{ "sha", SHA1dlen, initsha1key, },
+	{ "sha2_256", SHA2_256dlen, initsha2_256key, },
+	{ "sha2_384", SHA2_384dlen, initsha2_384key, },
+	{ "sha2_512", SHA2_512dlen, initsha2_512key, },
 	{ 0 }
 };
 
@@ -1413,7 +1522,7 @@ struct Encalg
 };
 
 static void
-initRC4key(Encalg *ea, Secret *s, uchar *p, uchar *unused1)
+initRC4key(Encalg *ea, Secret *s, uchar *p, uchar *)
 {
 	s->enckey = smalloc(sizeof(RC4state));
 	s->enc = rc4enc;
@@ -1423,7 +1532,7 @@ initRC4key(Encalg *ea, Secret *s, uchar *p, uchar *unused1)
 }
 
 static void
-initDES3key(Encalg *unused1, Secret *s, uchar *p, uchar *iv)
+initDES3key(Encalg *, Secret *s, uchar *p, uchar *iv)
 {
 	s->enckey = smalloc(sizeof(DES3state));
 	s->enc = des3enc;
@@ -1443,7 +1552,7 @@ initAESkey(Encalg *ea, Secret *s, uchar *p, uchar *iv)
 }
 
 static void
-initclearenc(Encalg *unused1, Secret *s, uchar *unused2, uchar *unused3)
+initclearenc(Encalg *, Secret *s, uchar *, uchar *)
 {
 	s->enc = noenc;
 	s->dec = noenc;
@@ -1453,6 +1562,10 @@ initclearenc(Encalg *unused1, Secret *s, uchar *unused2, uchar *unused3)
 static Encalg encrypttab[] =
 {
 	{ "clear", 0, 0, initclearenc },
+	/*
+	 * rc4 is deprecated because it can be broken by brute force,
+	 * but secstore, factotum and libsec/tlshand.c use it.
+	 */
 	{ "rc4_128", 128/8, 0, initRC4key },
 	{ "3des_ede_cbc", 3 * 8, 8, initDES3key },
 	{ "aes_128_cbc", 128/8, 16, initAESkey },
@@ -1558,12 +1671,12 @@ tlswrite(Chan *c, void *a, long n, vlong off)
 		if(tr->verset)
 			error("version already set");
 		m = strtol(cb->f[1], nil, 0);
+		if(m < MinProtoVersion || m > MaxProtoVersion)
+			error("unsupported version");
 		if(m == SSL3Version)
 			tr->packMac = sslPackMac;
-		else if(m == TLSVersion)
-			tr->packMac = tlsPackMac;
 		else
-			error("unsupported version");
+			tr->packMac = tlsPackMac;
 		tr->verset = 1;
 		tr->version = m;
 	}else if(strcmp(cb->f[0], "secret") == 0){
@@ -1605,8 +1718,10 @@ tlswrite(Chan *c, void *a, long n, vlong off)
 			error("misimplemented secret algorithm");
 		(*ha->initkey)(ha, tr->version, tos, &x[0]);
 		(*ha->initkey)(ha, tr->version, toc, &x[ha->maclen]);
-		(*ea->initkey)(ea, tos, &x[2 * ha->maclen], &x[2 * ha->maclen + 2 * ea->keylen]);
-		(*ea->initkey)(ea, toc, &x[2 * ha->maclen + ea->keylen], &x[2 * ha->maclen + 2 * ea->keylen + ea->ivlen]);
+		(*ea->initkey)(ea, tos, &x[2 * ha->maclen],
+			&x[2 * ha->maclen + 2 * ea->keylen]);
+		(*ea->initkey)(ea, toc, &x[2 * ha->maclen + ea->keylen],
+			&x[2 * ha->maclen + 2 * ea->keylen + ea->ivlen]);
 
 		if(!tos->mac || !tos->enc || !tos->dec
 		|| !toc->mac || !toc->enc || !toc->dec)
@@ -1799,12 +1914,13 @@ if(tr->debug)pprint("sendAlert %d\n", err);
 	msg = "tls unknown alert";
 	for(i=0; i < nelem(tlserrs); i++) {
 		if(tlserrs[i].err == err) {
+			fatal = tlserrs[i].fatal;
 			msg = tlserrs[i].msg;
 			if(tr->version == SSL3Version)
 				err = tlserrs[i].sslerr;
-			else
-				err = tlserrs[i].tlserr;
-			fatal = tlserrs[i].fatal;
+			else if (err == ENoCertificate)	/* special case */
+				err = ECertificateUnknown;
+			/* else err is fine as is */
 			break;
 		}
 	}
@@ -1966,7 +2082,7 @@ freeSec(Secret *s)
 }
 
 static int
-noenc(Secret *unused1, uchar *unused2, int n)
+noenc(Secret *, uchar *, int n)
 {
 	return n;
 }
@@ -2017,7 +2133,7 @@ blockpad(uchar *buf, int n, int block)
 		buf[n++] = pad;
 	return nn;
 }
-		
+
 static int
 des3enc(Secret *sec, uchar *buf, int n)
 {
@@ -2049,8 +2165,7 @@ aesdec(Secret *sec, uchar *buf, int n)
 }
 
 static DigestState*
-nomac(uchar *unused1, ulong unused2, uchar *unused3, ulong unused4,
-	uchar *unused5, DigestState *unused6)
+nomac(uchar *, ulong, uchar *, ulong, uchar *, DigestState *)
 {
 	return nil;
 }
@@ -2100,6 +2215,26 @@ static DigestState*
 sslmac_sha1(uchar *p, ulong len, uchar *key, ulong klen, uchar *digest, DigestState *s)
 {
 	return sslmac_x(p, len, key, klen, digest, s, sha1, SHA1dlen, 40);
+}
+
+// TODO: is padding of 40 right in all the sslmac_sha2_* functions?
+
+static DigestState*
+sslmac_sha2_256(uchar *p, ulong len, uchar *key, ulong klen, uchar *digest, DigestState *s)
+{
+	return sslmac_x(p, len, key, klen, digest, s, sha2_256, SHA2_256dlen, 40);
+}
+
+static DigestState*
+sslmac_sha2_384(uchar *p, ulong len, uchar *key, ulong klen, uchar *digest, DigestState *s)
+{
+	return sslmac_x(p, len, key, klen, digest, s, sha2_384, SHA2_384dlen, 40);
+}
+
+static DigestState*
+sslmac_sha2_512(uchar *p, ulong len, uchar *key, ulong klen, uchar *digest, DigestState *s)
+{
+	return sslmac_x(p, len, key, klen, digest, s, sha2_512, SHA2_512dlen, 40);
 }
 
 static DigestState*
@@ -2167,13 +2302,11 @@ put16(uchar *p, int x)
 	p[1] = x;
 }
 
-/*
 static u32int
 get32(uchar *p)
 {
 	return (p[0]<<24)|(p[1]<<16)|(p[2]<<8)|p[3];
 }
-*/
 
 static int
 get16(uchar *p)
