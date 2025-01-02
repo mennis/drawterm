@@ -13,10 +13,13 @@ SDK1011=-isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.pl
 
 SDK1012=-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
 
+SDK1015=-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+
 SDK10=-isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
 
 ARCHFLAGS64=-arch x86_64 -m64
 ARCHFLAGS32=-arch i386 -m32
+ARCHFLAGSARM=-arch arm64e
 
 # Select your target here by setting 32 or 64 and SDK options.
 # The SDK can be left blank to use the default SDK for your platform, e.g.,
@@ -65,5 +68,8 @@ libmachdep.a:
 	arch=amd64; \
 	(cd posix-$$arch && make "ASFLAGS=$(ASFLAGS64)" "ARCHFLAGS=$(ARCHFLAGS64)")
 	mv libmachdep.a libmachdep-amd64.a
-	lipo -create -arch i386 libmachdep-386.a -arch x86_64 libmachdep-amd64.a -output libmachdep.a
+	arch=arm; \
+	(cd posix-$$arch && make "ASFLAGS=$(ASFLAGSARM)" "ARCHFLAGS=$(ARCHFLAGSARM)")
+	mv libmachdep.a libmachdep-arm64.a
+	lipo -create -arch i386 libmachdep-386.a -arch x86_64 libmachdep-amd64.a -arch arm64e libmachdep-arm64.a -output libmachdep.a
 

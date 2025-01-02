@@ -1,3 +1,3 @@
 #!/bin/sh
 
-sw_vers | awk '/ProductVersion/{split($2,a,".");print(a[2])}'
+sw_vers --productVersion | awk '{split($1,a,".");print(a[1])}'
