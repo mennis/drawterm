@@ -1,6 +1,7 @@
 #include "u.h"
 #include "libc.h"
 
+#ifndef PTHREAD
 int
 tas(long *x)
 {
@@ -24,4 +25,4 @@ tas(long *x)
 		return 1;
 	}
 }
-
+#endif

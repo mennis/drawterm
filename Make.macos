@@ -4,11 +4,13 @@
 ARCHFLAGS64=-arch x86_64 -m64
 ARCHFLAGS32=-arch i386 -m32
 
+ARCHFLAGSARM64=-arch arm64
+
 # Select your target here by setting 32 or 64 and SDK options.
 # The SDK can be left blank to use the default SDK for your platform, e.g.,
 # on a 10.9 machine with the latest Xcode that you don't need to run on
 # any prior versions, just keep the SDK as defined.
-ARCHFLAGS=-arch x86_64 -m64
+ARCHFLAGS=-arch arm64
 SDK=
 
 PTHREAD=-lpthread	# for Mac
@@ -24,7 +26,7 @@ AUDIO=none
 
 #WARNINGS=-Wshorten-64-to-32
 
-CC=clang
+CC=xcrun --sdk macosx clang
 CFLAGS=$(WARNINGS) $(ARCHFLAGS) $(SDK) -fwritable-strings -g -O0 -I. -I$(ROOT)\
 	-I$(ROOT)/include -I$(ROOT)/kern -I$(ROOT)/gui-macos -c \
 	-D_THREAD_SAFE -DPTHREAD -DCOCOA
@@ -41,8 +43,8 @@ all: default
 libmachdep.a:
 	arch=amd64; \
 	(cd posix-$$arch && make "ARCHFLAGS=-arch x86_64 -m64")
-#	mv libmachdep.a libmachdep-amd64.a
-#	arch=arm64; \
-#	(cd posix-$$arch && make "ARCHFLAGS=-arch arm64 -m64")
-#	mv libmachdep.a libmachdep-arm64.a
-#	lipo -create -arch x86_64 libmachdep-amd64.a -arch arm64 libmachdep-arm64.a -output libmachdep.a
+	mv libmachdep.a libmachdep-amd64.a
+	arch=arm64; \
+	(cd posix-$$arch && make "ARCHFLAGS=-arch arm64 -m64")
+	mv libmachdep.a libmachdep-arm64.a
+	lipo -create -arch x86_64 libmachdep-amd64.a -arch arm64 libmachdep-arm64.a -output libmachdep.a
